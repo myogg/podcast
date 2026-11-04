@@ -18,11 +18,7 @@ const { episode, audioSize } = Astro.props;
           <audio controls preload="metadata" src={episode.audioUrl} aria-label={`播放：${episode.title}`}></audio>
           <span class="audio-meta">{audioSize ? `${(audioSize / 1024 / 1024).toFixed(1)} MB` : "R2 音频"}</span>
         </div>
-        <a class="source-link" href={episode.originalUrl} target="_blank" rel="noreferrer">在博客阅读原文 ↗</a>
       </div>
     </div>
-    <article class="article prose">
-      <slot />
-    </article>
   </main>
 </BaseLayout>

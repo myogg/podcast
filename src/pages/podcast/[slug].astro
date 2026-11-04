@@ -1,5 +1,5 @@
 ---
-import { getCollection, render } from "astro:content";
+import { getCollection } from "astro:content";
 import EpisodeLayout from "../../layouts/EpisodeLayout.astro";
 import { sortEpisodes } from "../../lib/episodes";
 
@@ -12,8 +12,5 @@ const { episode } = Astro.props;
 const entries = await getCollection("post");
 const entry = entries.find((item) => item.slug === episode.slug);
 if (!entry) throw new Error(`Missing content for ${episode.slug}`);
-const { Content } = await render(entry);
 ---
-<EpisodeLayout episode={episode}>
-  <Content />
-</EpisodeLayout>
+<EpisodeLayout episode={episode} />

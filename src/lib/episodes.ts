@@ -7,7 +7,6 @@ export interface Episode {
   date: Date;
   image: string;
   audioUrl: string;
-  originalUrl: string;
   tags: string[];
   body: string;
 }
@@ -51,7 +50,6 @@ export function toEpisode(entry: CollectionEntry<"post">): Episode {
     date: new Date(data.date!),
     image,
     audioUrl: `${audioBase}/audio/${entry.slug}.mp3`,
-    originalUrl: `${blogUrl}/post/${entry.slug}`,
     tags: data.tags || [],
     body,
   };
