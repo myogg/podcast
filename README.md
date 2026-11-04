@@ -10,7 +10,7 @@
 
 ## 自动同步与部署
 
-`.github/workflows/deploy-cloudflare.yml` 会每 15 分钟从公开的 `myogg/astro` 拉取最新文章，构建播客站并部署到 Cloudflare Pages。博客文章发布后最多等待一个轮询周期；如果 TTS 音频稍后才生成，下一次轮询会再次检查 R2 并把新音频加入 RSS。
+`.github/workflows/deploy-cloudflare.yml` 会每 4 小时从公开的 `myogg/astro` 拉取最新文章，构建播客站并部署到 Cloudflare Pages。博客文章发布后最多等待一个轮询周期；如果 TTS 音频稍后才生成，下一次轮询会再次检查 R2 并把新音频加入 RSS。
 
 在 GitHub Actions Secrets 中配置 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`，Cloudflare Pages 项目名固定为 `134688-podcast`。详细步骤见 [`docs/cloudflare-deployment.md`](docs/cloudflare-deployment.md)。
 

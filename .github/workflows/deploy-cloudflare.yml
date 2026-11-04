@@ -5,7 +5,7 @@ on:
     branches: [main]
   schedule:
     # 轮询博客和 R2，覆盖“文章先发布、TTS 稍后生成”的情况
-    - cron: "*/15 * * * *"
+    - cron: "0 */4 * * *"
   workflow_dispatch:
 
 permissions:

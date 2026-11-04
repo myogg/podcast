@@ -15,7 +15,7 @@
 工作流在以下情况执行：
 
 - 播客仓库 `main` 有提交时立即执行；
-- 每 15 分钟定时执行一次，拉取 `myogg/astro` 的最新文章，同时检查 R2 中是否已经生成对应 MP3；
+- 每 4 小时定时执行一次，拉取 `myogg/astro` 的最新文章，同时检查 R2 中是否已经生成对应 MP3；
 - 手动点击 GitHub Actions 的 **Run workflow** 时执行。
 
 每次执行都会从公开的 `myogg/astro` 拉取最新 `src/content/post`，再构建独立播客站。RSS 生成时对 `https://tel.xx.kg/audio/{slug}.mp3` 发起 `HEAD`，只有能取得真实 `Content-Length` 的音频才会写入 `/podcast.xml`。因此博客文章和 TTS 音频不必同时完成：音频稍后生成后，下一次定时任务会自动把它加入 RSS。
