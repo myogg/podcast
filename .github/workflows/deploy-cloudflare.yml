@@ -1,0 +1,64 @@
+name: Sync blog and deploy podcast
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 轮询博客和 R2，覆盖“文章先发布、TTS 稍后生成”的情况
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: podcast-cloudflare-production
+  cancel-in-progress: true
+
+env:
+  AUDIO_BASE_URL: https://tel.xx.kg
+  PAGES_PROJECT: 134688-podcast
+
+jobs:
+  sync-build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out podcast site
+        uses: actions/checkout@v4
+
+      - name: Fetch latest blog posts
+        run: |
+          rm -rf /tmp/astro-source
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/myogg/astro.git /tmp/astro-source
+          git -C /tmp/astro-source sparse-checkout set src/content/post
+          rm -rf src/content/post
+          mkdir -p src/content
+          cp -R /tmp/astro-source/src/content/post src/content/post
+          echo "Synced $(find src/content/post -type f -name '*.md' | wc -l) blog posts"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build podcast and RSS
+        env:
+          PUBLIC_AUDIO_BASE_URL: ${{ env.AUDIO_BASE_URL }}
+          PUBLIC_SITE_URL: https://134688-podcast.pages.dev
+        run: pnpm build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name ${{ env.PAGES_PROJECT }} --branch main

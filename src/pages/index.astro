@@ -1,0 +1,52 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { formatDate, sortEpisodes } from "../lib/episodes";
+import "../styles/global.css";
+
+const episodes = sortEpisodes(await getCollection("post"));
+const latest = episodes[0];
+---
+<BaseLayout>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">134688 / Audio Archive</div>
+        <h1>把文章，<span>听</span>出来。</h1>
+        <p class="hero-copy">这里是 134688 的独立播客站。值得读的文章，也值得在散步、通勤或夜深之后，换一种方式慢慢听。</p>
+        <div class="hero-actions">
+          {latest && <a class="button" href={`/podcast/${latest.slug}`}>▶ 听最新一集</a>}
+          <a class="button secondary" href="/podcast.xml">订阅 RSS</a>
+        </div>
+      </div>
+      <aside class="signal-card" aria-label="播客介绍">
+        <div class="eyebrow">Now recording</div>
+        <strong>文字是起点，声音让它继续走。</strong>
+        <div class="wave" aria-hidden="true">
+          {Array.from({ length: 28 }, (_, i) => <i style={`--h:${18 + ((i * 17) % 38)}px`}></i>)}
+        </div>
+        <span class="mono" style="color: var(--muted); font-size: .7rem;">{episodes.length} EPISODES / ZH-CN</span>
+      </aside>
+    </section>
+
+    <section aria-labelledby="latest-heading">
+      <div class="section-head">
+        <h2 id="latest-heading">最新节目</h2>
+        <p>从最近的一篇开始收听</p>
+      </div>
+      <div class="episode-list">
+        {episodes.slice(0, 40).map((episode) => (
+          <a class="episode-row" href={`/podcast/${episode.slug}`}>
+            <img class="episode-cover" src={episode.image} alt="" loading="lazy" />
+            <div>
+              <div class="episode-date">{formatDate(episode.date)}</div>
+              <div class="episode-title">{episode.title}</div>
+              <p class="episode-description">{episode.description}</p>
+            </div>
+            <span class="episode-arrow" aria-hidden="true">↗</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  </main>
+</BaseLayout>

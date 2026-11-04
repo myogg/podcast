@@ -1,0 +1,18 @@
+---
+title: "一个开源的双因素认证码管理器"
+date: 2024-09-01 08:01
+author: "mymsnn"
+tags: ["blog"]
+---
+https://github.com/sponsors/ente-io
+
+![](https://pic.superbed.cc/item/66d47039fcada11d373c283b.webp)
+
+Ente Auth Open source 2FA authenticator, with end-to-end encrypted backups
+
+
+https://ente.io/auth/
+
+Secure Backups Auth provides end-to-end encrypted cloud backups so you don't have to worry about losing your tokens. Our cryptography has been externally audited.
+
+

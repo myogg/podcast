@@ -1,0 +1,74 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  type?: "website" | "article";
+}
+
+const {
+  title = "134688 播客",
+  description = "把值得读的文章，变成适合慢慢听的中文声音档案。",
+  image = "https://134688.xyz/favicon.ico",
+  type = "website",
+} = Astro.props;
+const siteUrl = import.meta.env.PUBLIC_SITE_URL || "https://podcast.134688.xyz";
+const canonical = new URL(Astro.url.pathname, siteUrl).toString();
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="application/rss+xml" title="134688 播客 RSS" href={`${siteUrl}/podcast.xml`} />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+    <title>{title} · 134688</title>
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="site-header">
+        <a class="wordmark" href="/" aria-label="返回播客首页"><span class="wordmark-mark">◒</span> 134688 <em>播客</em></a>
+        <nav aria-label="主要导航">
+          <a href="/">最新节目</a>
+          <a href="/podcast.xml">RSS 订阅</a>
+          <a href="https://134688.xyz" target="_blank" rel="noreferrer">阅读原文 ↗</a>
+        </nav>
+      </header>
+      <slot />
+      <footer class="site-footer">
+        <span>134688 播客 · 慢慢听，也慢慢想。</span>
+        <a href="/podcast.xml">订阅 Podcast RSS</a>
+      </footer>
+    </div>
+  </body>
+</html>
+
+<style is:global>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
+  :root { font-family: 'Noto Sans SC', system-ui, sans-serif; color: #24221f; background: #f5f1e8; font-synthesis: none; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; min-width: 320px; background: radial-gradient(circle at 80% 4%, rgba(223, 142, 43, .12), transparent 28rem), #f5f1e8; }
+  a { color: inherit; }
+  .site-shell { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+  .site-header { display: flex; justify-content: space-between; align-items: center; padding: 28px 0 22px; border-bottom: 1px solid #d7d0c2; }
+  .wordmark { text-decoration: none; font-size: 1.15rem; font-weight: 800; letter-spacing: -.04em; }
+  .wordmark-mark { display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 7px; border-radius: 50%; background: #d78022; color: #fff8ea; font-size: 1.1rem; }
+  .wordmark em { color: #8f897d; font-style: normal; font-weight: 500; }
+  nav { display: flex; gap: 22px; color: #777066; font-size: .88rem; }
+  nav a, .site-footer a { text-decoration: none; }
+  nav a:hover, .site-footer a:hover { color: #c46913; }
+  .site-footer { display: flex; justify-content: space-between; gap: 20px; padding: 46px 0 34px; color: #8b8479; font: .75rem 'IBM Plex Mono', monospace; }
+  .site-footer a { color: #a8672c; }
+  @media (max-width: 680px) { .site-shell { padding: 0 18px; } .site-header { align-items: flex-start; gap: 20px; } nav { gap: 10px; flex-wrap: wrap; justify-content: flex-end; } .site-footer { flex-direction: column; } }
+</style>

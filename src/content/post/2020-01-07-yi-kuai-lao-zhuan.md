@@ -1,0 +1,7 @@
+---
+title: "一块老砖"
+date: 2020-01-07 08:00
+tags: ["2020"]
+---
+ 收藏而已
+![1dd24a2a44ccdef349df3fd9a329f5f.jpg](https://i.loli.net/2020/01/07/FUkQr4abWtHdBcC.jpg)

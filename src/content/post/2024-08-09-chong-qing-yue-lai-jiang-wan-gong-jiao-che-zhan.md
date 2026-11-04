@@ -1,0 +1,11 @@
+---
+title: "重庆“悦来江湾”公交车站"
+date: 2024-08-09 08:02
+author: "mymsnn"
+tags: ["blog"]
+---
+重庆“悦来江湾”公交车站，由几块巨石组成，象征当地江边的鹅卵石。
+
+![](https://pic.imgdb.cn/item/66b604f9d9c307b7e9b951f3.webp)
+
+

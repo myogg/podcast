@@ -1,0 +1,19 @@
+---
+import { getCollection, render } from "astro:content";
+import EpisodeLayout from "../../layouts/EpisodeLayout.astro";
+import { sortEpisodes } from "../../lib/episodes";
+
+export async function getStaticPaths() {
+  const entries = sortEpisodes(await getCollection("post"));
+  return entries.map((episode) => ({ params: { slug: episode.slug }, props: { episode } }));
+}
+
+const { episode } = Astro.props;
+const entries = await getCollection("post");
+const entry = entries.find((item) => item.slug === episode.slug);
+if (!entry) throw new Error(`Missing content for ${episode.slug}`);
+const { Content } = await render(entry);
+---
+<EpisodeLayout episode={episode}>
+  <Content />
+</EpisodeLayout>

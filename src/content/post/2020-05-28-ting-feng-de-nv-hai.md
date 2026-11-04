@@ -1,0 +1,7 @@
+---
+title: "听风的女孩"
+date: 2020-05-28 08:00
+---
+备份老同学的习作
+
+![e49848cd5b9e09d10969fbe87ce5901.jpg](https://i.loli.net/2020/05/28/D1sSVLgylvnqOYr.jpg)
