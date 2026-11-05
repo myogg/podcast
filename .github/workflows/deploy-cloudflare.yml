@@ -17,7 +17,7 @@ concurrency:
 
 env:
   AUDIO_BASE_URL: https://tel.xx.kg
-  PAGES_PROJECT: 134688-podcast
+  PAGES_PROJECT: podcast
 
 jobs:
   sync-build-deploy:
@@ -52,7 +52,7 @@ jobs:
       - name: Build podcast and RSS
         env:
           PUBLIC_AUDIO_BASE_URL: ${{ env.AUDIO_BASE_URL }}
-          PUBLIC_SITE_URL: https://134688-podcast.pages.dev
+          PUBLIC_SITE_URL: https://podcast.pages.dev
         run: pnpm build
 
       - name: Ensure Cloudflare Pages project exists

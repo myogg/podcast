@@ -4,11 +4,11 @@
 
 ## 一次性准备
 
-1. 在 Cloudflare Pages 创建项目，项目名设为 `134688-podcast`。可以先不连接 Git，后续由 Wrangler 上传。
-2. 在 GitHub 仓库 `myogg/134688-podcast` 的 **Settings → Secrets and variables → Actions** 中增加：
+1. 在 Cloudflare Pages 创建项目，项目名为 `podcast`。可以先不连接 Git，后续由 Wrangler 上传。
+2. 在 GitHub 仓库 `myogg/podcast` 的 **Settings → Secrets and variables → Actions** 中增加：
    - `CLOUDFLARE_API_TOKEN`：只授予该账号 Cloudflare Pages 编辑权限的 API Token。
    - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID。
-3. 把 `134688-podcast.pages.dev` 绑定到需要的自定义域名，例如 `podcast.134688.xyz`。
+3. 把 `podcast.pages.dev` 绑定到需要的自定义域名，例如 `podcast.134688.xyz`。
 
 ## 自动行为
 
