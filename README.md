@@ -18,6 +18,8 @@
 
 音频地址为 `https://tel.xx.kg/audio/{slug}.mp3`。RSS 构建期间会对每个音频 URL 发起 HTTP `HEAD` 请求，把真实 `Content-Length` 写入 `<enclosure length="...">`。无法确认文件大小的文章不会进入 RSS，不会写入估算值。
 
+没有文章图片的单集会使用站点专属默认封面 `public/jiang-podcast-cover.png`；有文章图片的单集继续使用原图片。
+
 ## 本地开发
 
 ```bash

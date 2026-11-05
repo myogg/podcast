@@ -13,6 +13,7 @@ export interface Episode {
 
 const blogUrl = (import.meta.env.PUBLIC_BLOG_URL || "https://134688.xyz").replace(/\/$/, "");
 const audioBase = (import.meta.env.PUBLIC_AUDIO_BASE_URL || "https://tel.xx.kg").replace(/\/$/, "");
+const siteUrl = (import.meta.env.PUBLIC_SITE_URL || "https://podcast-3a5.pages.dev").replace(/\/$/, "");
 
 function absoluteUrl(value: string, fallback: string): string {
   if (!value) return fallback;
@@ -42,7 +43,8 @@ function firstParagraph(body: string): string {
 export function toEpisode(entry: CollectionEntry<"post">): Episode {
   const { data, body = "" } = entry;
   const description = data.description || firstParagraph(body) || data.title;
-  const image = absoluteUrl(data.image || firstImage(body) || "/favicon.ico", `${blogUrl}/favicon.ico`);
+  const sourceImage = data.image || firstImage(body);
+  const image = sourceImage ? absoluteUrl(sourceImage, `${blogUrl}/favicon.ico`) : `${siteUrl}/jiang-podcast-cover.png`;
   return {
     slug: entry.slug,
     title: data.title,
