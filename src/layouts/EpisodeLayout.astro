@@ -32,7 +32,7 @@ const { episode, audioSize } = Astro.props;
   const toggle = document.querySelector<HTMLButtonElement>("#ambient-toggle");
 
   if (episodeAudio && ambientAudio && cover && toggle) {
-    ambientAudio.volume = 0.1;
+    ambientAudio.volume = 0.18;
 
     const syncAmbient = () => {
       if (episodeAudio.paused || !toggle || toggle.getAttribute("aria-pressed") !== "true") {
