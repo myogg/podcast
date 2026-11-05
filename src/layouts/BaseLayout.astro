@@ -7,12 +7,12 @@ interface Props {
 }
 
 const {
-  title = "134688 播客",
-  description = "把值得读的文章，变成适合慢慢听的中文声音档案。",
-  image = "https://134688.xyz/favicon.ico",
+  title = "姜小小的播客",
+  description = "姜小小的播客，记录值得反复聆听的中文声音。",
+  image = "https://podcast-3a5.pages.dev/favicon.svg",
   type = "website",
 } = Astro.props;
-const siteUrl = import.meta.env.PUBLIC_SITE_URL || "https://podcast.134688.xyz";
+const siteUrl = import.meta.env.PUBLIC_SITE_URL || "https://podcast-3a5.pages.dev";
 const canonical = new URL(Astro.url.pathname, siteUrl).toString();
 ---
 <!doctype html>
@@ -22,7 +22,7 @@ const canonical = new URL(Astro.url.pathname, siteUrl).toString();
     <meta name="viewport" content="width=device-width" />
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="alternate" type="application/rss+xml" title="134688 播客 RSS" href={`${siteUrl}/podcast.xml`} />
+    <link rel="alternate" type="application/rss+xml" title="姜小小的播客 RSS" href={`${siteUrl}/podcast.xml`} />
     <meta property="og:type" content={type} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -32,12 +32,12 @@ const canonical = new URL(Astro.url.pathname, siteUrl).toString();
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
-    <title>{title} · 134688</title>
+    <title>{title} · 姜小小</title>
   </head>
   <body>
     <div class="site-shell">
       <header class="site-header">
-        <a class="wordmark" href="/" aria-label="返回播客首页"><span class="wordmark-mark">◒</span> 134688 <em>播客</em></a>
+        <a class="wordmark" href="/" aria-label="返回姜小小的播客首页"><span class="wordmark-mark">◒</span> 姜小小 <em>的播客</em></a>
         <nav aria-label="主要导航">
           <a href="/">最新节目</a>
           <a href="/podcast.xml">RSS 订阅</a>
@@ -45,7 +45,7 @@ const canonical = new URL(Astro.url.pathname, siteUrl).toString();
       </header>
       <slot />
       <footer class="site-footer">
-        <span>134688 播客 · 慢慢听，也慢慢想。</span>
+        <span>姜小小的播客 · 慢慢听，也慢慢想。</span>
         <a href="/podcast.xml">订阅 Podcast RSS</a>
       </footer>
     </div>
