@@ -9,16 +9,60 @@ const { episode, audioSize } = Astro.props;
 <BaseLayout title={`${episode.title} · 姜小小的播客`} description={episode.description} image={episode.image} type="article">
   <main class="detail-hero">
     <div class="detail-grid">
-      <img class="detail-cover" src={episode.image} alt={episode.title} loading="eager" />
+      <img class="detail-cover" id="episode-cover" src={episode.image} alt={episode.title} loading="eager" />
       <div>
         <div class="eyebrow">Episode / {episode.slug}</div>
         <h1 class="detail-title">{episode.title}</h1>
         <p class="detail-description">{episode.description}</p>
         <div class="audio-panel">
-          <audio controls preload="metadata" src={episode.audioUrl} aria-label={`播放：${episode.title}`}></audio>
+          <audio id="episode-audio" controls preload="metadata" src={episode.audioUrl} aria-label={`播放：${episode.title}`}></audio>
+          <audio id="ambient-audio" loop preload="none" src="/podcast-ambient.mp3" aria-hidden="true"></audio>
+          <button class="ambient-toggle" id="ambient-toggle" type="button" aria-pressed="true">背景音乐：开</button>
           <span class="audio-meta">{audioSize ? `${(audioSize / 1024 / 1024).toFixed(1)} MB` : "R2 音频"}</span>
         </div>
       </div>
     </div>
   </main>
 </BaseLayout>
+
+<script>
+  const episodeAudio = document.querySelector<HTMLAudioElement>("#episode-audio");
+  const ambientAudio = document.querySelector<HTMLAudioElement>("#ambient-audio");
+  const cover = document.querySelector<HTMLElement>("#episode-cover");
+  const toggle = document.querySelector<HTMLButtonElement>("#ambient-toggle");
+
+  if (episodeAudio && ambientAudio && cover && toggle) {
+    ambientAudio.volume = 0.1;
+
+    const syncAmbient = () => {
+      if (episodeAudio.paused || !toggle || toggle.getAttribute("aria-pressed") !== "true") {
+        ambientAudio.pause();
+        cover.classList.remove("is-playing");
+      } else {
+        cover.classList.add("is-playing");
+        ambientAudio.play().catch(() => undefined);
+      }
+    };
+
+    episodeAudio.addEventListener("play", syncAmbient);
+    episodeAudio.addEventListener("pause", syncAmbient);
+    episodeAudio.addEventListener("ended", syncAmbient);
+    toggle.addEventListener("click", () => {
+      const enabled = toggle.getAttribute("aria-pressed") !== "true";
+      toggle.setAttribute("aria-pressed", String(enabled));
+      toggle.textContent = `背景音乐：${enabled ? "开" : "关"}`;
+      syncAmbient();
+    });
+  }
+</script>
+
+<style>
+  .detail-cover { border-radius: 50%; object-fit: cover; aspect-ratio: 1; box-shadow: 0 18px 38px rgba(62, 43, 23, .18); }
+  .detail-cover.is-playing { animation: cover-spin 28s linear infinite; }
+  .audio-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
+  .audio-panel audio { flex: 1 1 100%; }
+  .ambient-toggle { border: 1px solid #d7d0c2; border-radius: 999px; padding: 8px 12px; background: #fffaf0; color: #776f64; cursor: pointer; font: inherit; font-size: .78rem; }
+  .ambient-toggle:hover { border-color: #c46913; color: #c46913; }
+  @keyframes cover-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .detail-cover.is-playing { animation: none; } }
+</style>

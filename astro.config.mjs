@@ -1,6 +1,6 @@
 import { defineConfig } from "astro/config";
 
 export default defineConfig({
-  site: process.env.PUBLIC_SITE_URL || "https://podcast-3a5.pages.dev",
+  site: process.env.PUBLIC_SITE_URL || "https://r.134688.xyz",
   output: "static",
 });

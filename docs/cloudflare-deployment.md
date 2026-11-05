@@ -8,7 +8,7 @@
 2. 在 GitHub 仓库 `myogg/podcast` 的 **Settings → Secrets and variables → Actions** 中增加：
    - `CLOUDFLARE_API_TOKEN`：只授予该账号 Cloudflare Pages 编辑权限的 API Token。
    - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID。
-3. 把 `podcast-3a5.pages.dev` 绑定到你的自定义域名，例如 `podcast.example.com`。
+3. 在 Cloudflare Pages 的 Custom domains 中绑定 `r.134688.xyz`；DNS 使用 CNAME 指向 `podcast-3a5.pages.dev`。
 
 ## 自动行为
 

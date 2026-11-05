@@ -9,10 +9,10 @@ interface Props {
 const {
   title = "姜小小的播客",
   description = "姜小小的播客，记录值得反复聆听的中文声音。",
-  image = "https://podcast-3a5.pages.dev/favicon.svg",
+  image = "https://r.134688.xyz/favicon.svg",
   type = "website",
 } = Astro.props;
-const siteUrl = import.meta.env.PUBLIC_SITE_URL || "https://podcast-3a5.pages.dev";
+const siteUrl = import.meta.env.PUBLIC_SITE_URL || "https://r.134688.xyz";
 const canonical = new URL(Astro.url.pathname, siteUrl).toString();
 ---
 <!doctype html>

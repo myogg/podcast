@@ -1,3 +1,3 @@
 export default {
-  logoUrl: "https://podcast-3a5.pages.dev/favicon.svg",
+  logoUrl: "https://r.134688.xyz/favicon.svg",
 };

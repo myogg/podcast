@@ -52,7 +52,7 @@ jobs:
       - name: Build podcast and RSS
         env:
           PUBLIC_AUDIO_BASE_URL: ${{ env.AUDIO_BASE_URL }}
-          PUBLIC_SITE_URL: https://podcast-3a5.pages.dev
+          PUBLIC_SITE_URL: https://r.134688.xyz
         run: pnpm build
 
       - name: Ensure Cloudflare Pages project exists
