@@ -16,7 +16,7 @@ export const GET: APIRoute = async (context) => {
     title: "姜小小的播客",
     description: "姜小小的播客，记录值得反复聆听的中文声音。",
     site: context.site || import.meta.env.PUBLIC_SITE_URL || "https://r.134688.xyz",
-    customData: "<language>zh-CN</language><itunes:author>姜小小</itunes:author><itunes:category text=\"Arts\"/><itunes:explicit>no</itunes:explicit>",
+    customData: "<language>zh-CN</language><itunes:author>姜小小</itunes:author><itunes:category text=\"Arts\"/><itunes:explicit>false</itunes:explicit>",
     items: publishable.map(({ episode, audio }) => ({
       title: episode.title,
       description: episode.description,
