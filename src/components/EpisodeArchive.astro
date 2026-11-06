@@ -1,0 +1,47 @@
+---
+import type { Episode } from "../lib/episodes";
+import { formatDate } from "../lib/episodes";
+
+interface Props {
+  episodes: Episode[];
+  page: number;
+  totalPages: number;
+}
+
+const { episodes, page, totalPages } = Astro.props;
+const pageNumbers = Array.from({ length: totalPages }, (_, index) => index + 1);
+const pageHref = (number: number) => (number === 1 ? "/" : `/episodes/page/${number}`);
+---
+<div class="episode-list">
+  {episodes.length ? episodes.map((episode) => (
+    <a class="episode-row" href={`/podcast/${episode.slug}`}>
+      <img class="episode-cover" src={episode.image} alt="" loading="lazy" />
+      <div>
+        <div class="episode-date">{formatDate(episode.date)}</div>
+        <div class="episode-title">{episode.title}</div>
+        <p class="episode-description">{episode.description}</p>
+      </div>
+      <span class="episode-arrow" aria-hidden="true">↗</span>
+    </a>
+  )) : <p class="empty">当前没有可播放的单集。</p>}
+</div>
+
+{totalPages > 1 && (
+  <nav class="episode-pagination" aria-label="节目列表分页">
+    {page > 1 ? (
+      <a class="pagination-link" href={pageHref(page - 1)} rel="prev">← 上一页</a>
+    ) : <span class="pagination-link is-disabled" aria-disabled="true">← 上一页</span>}
+    <div class="pagination-pages" aria-label={`第 ${page} 页，共 ${totalPages} 页`}>
+      {pageNumbers.map((number) => (
+        <a
+          class:list={["pagination-number", { "is-current": number === page }]}
+          href={pageHref(number)}
+          aria-current={number === page ? "page" : undefined}
+        >{number}</a>
+      ))}
+    </div>
+    {page < totalPages ? (
+      <a class="pagination-link" href={pageHref(page + 1)} rel="next">下一页 →</a>
+    ) : <span class="pagination-link is-disabled" aria-disabled="true">下一页 →</span>}
+  </nav>
+)}

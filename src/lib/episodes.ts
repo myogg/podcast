@@ -78,6 +78,32 @@ export async function headAudio(url: string): Promise<{ size: number; contentTyp
   }
 }
 
+export interface PublishableEpisode {
+  episode: Episode;
+  audio: { size: number; contentType: string };
+}
+
+let publishableEpisodesPromise: Promise<PublishableEpisode[]> | undefined;
+
+/**
+ * Return only episodes whose public R2 audio URL responds with a real,
+ * positive Content-Length. Cache this promise during the static build so the
+ * home page, archive pages and RSS feed share one availability check.
+ */
+export function episodesWithAudio(episodes: Episode[]): Promise<PublishableEpisode[]> {
+  if (!publishableEpisodesPromise) {
+    publishableEpisodesPromise = (async () => {
+      const checked = await Promise.all(
+        episodes.map(async (episode) => ({ episode, audio: await headAudio(episode.audioUrl) })),
+      );
+      return checked.filter(
+        (item): item is PublishableEpisode => item.audio !== null,
+      );
+    })();
+  }
+  return publishableEpisodesPromise;
+}
+
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "long", day: "numeric" }).format(date);
 }

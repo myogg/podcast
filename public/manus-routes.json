@@ -1,1 +1,1 @@
-{"routes":[{"path":"/","title":"姜小小的播客"},{"path":"/podcast/:slug","title":"播客单集"},{"path":"/podcast.xml","title":"Podcast RSS"}]}
+{"routes":[{"path":"/","title":"姜小小的播客"},{"path":"/episodes/page/:page","title":"播客历史节目"},{"path":"/podcast/:slug","title":"播客单集"},{"path":"/podcast.xml","title":"Podcast RSS"}]}

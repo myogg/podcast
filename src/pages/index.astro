@@ -1,11 +1,16 @@
 ---
 import { getCollection } from "astro:content";
 import BaseLayout from "../layouts/BaseLayout.astro";
-import { formatDate, sortEpisodes } from "../lib/episodes";
+import EpisodeArchive from "../components/EpisodeArchive.astro";
+import { episodesWithAudio, sortEpisodes } from "../lib/episodes";
 import "../styles/global.css";
 
-const episodes = sortEpisodes(await getCollection("post"));
-const latest = episodes[0];
+const allEpisodes = sortEpisodes(await getCollection("post"));
+const publishable = await episodesWithAudio(allEpisodes);
+const pageSize = 40;
+const totalPages = Math.ceil(publishable.length / pageSize);
+const episodes = publishable.slice(0, pageSize).map(({ episode }) => episode);
+const latest = publishable[0]?.episode;
 ---
 <BaseLayout>
   <main>
@@ -25,28 +30,19 @@ const latest = episodes[0];
         <div class="wave" aria-hidden="true">
           {Array.from({ length: 28 }, (_, i) => <i style={`--h:${18 + ((i * 17) % 38)}px`}></i>)}
         </div>
-        <span class="mono" style="color: var(--muted); font-size: .7rem;">{episodes.length} EPISODES / ZH-CN</span>
+        <span class="mono episode-count">{publishable.length} 集可收听 / ZH-CN</span>
       </aside>
     </section>
 
     <section aria-labelledby="latest-heading">
       <div class="section-head">
-        <h2 id="latest-heading">最新节目</h2>
-        <p>从最近的一篇开始收听</p>
+        <div>
+          <h2 id="latest-heading">已生成音频 · 最新节目</h2>
+          <p>仅显示音频已就绪的单集，共 {publishable.length} 集，每页 {pageSize} 集</p>
+        </div>
+        <a class="archive-rss-link" href="/podcast.xml">RSS 中查看全部节目 →</a>
       </div>
-      <div class="episode-list">
-        {episodes.slice(0, 40).map((episode) => (
-          <a class="episode-row" href={`/podcast/${episode.slug}`}>
-            <img class="episode-cover" src={episode.image} alt="" loading="lazy" />
-            <div>
-              <div class="episode-date">{formatDate(episode.date)}</div>
-              <div class="episode-title">{episode.title}</div>
-              <p class="episode-description">{episode.description}</p>
-            </div>
-            <span class="episode-arrow" aria-hidden="true">↗</span>
-          </a>
-        ))}
-      </div>
+      <EpisodeArchive episodes={episodes} page={1} totalPages={totalPages} />
     </section>
   </main>
 </BaseLayout>

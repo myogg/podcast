@@ -1,0 +1,42 @@
+---
+import { getCollection } from "astro:content";
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import EpisodeArchive from "../../../components/EpisodeArchive.astro";
+import { episodesWithAudio, sortEpisodes } from "../../../lib/episodes";
+import "../../../styles/global.css";
+
+const PAGE_SIZE = 40;
+
+export async function getStaticPaths() {
+  const pageSize = 40;
+  const allEpisodes = sortEpisodes(await getCollection("post"));
+  const publishable = await episodesWithAudio(allEpisodes);
+  const totalPages = Math.ceil(publishable.length / pageSize);
+
+  return Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => {
+    const page = index + 2;
+    const start = (page - 1) * pageSize;
+    return {
+      params: { page: String(page) },
+      props: {
+        page,
+        totalPages,
+        totalEpisodes: publishable.length,
+        episodes: publishable.slice(start, start + pageSize).map(({ episode }) => episode),
+      },
+    };
+  });
+}
+
+const { page, totalPages, totalEpisodes, episodes } = Astro.props;
+---
+<BaseLayout title={`历史节目 · 第 ${page} 页`} description={`姜小小的播客历史单集，第 ${page} 页，共 ${totalEpisodes} 集。`}>
+  <main>
+    <section class="archive-page-heading">
+      <div class="eyebrow">Audio Archive / Page {page}</div>
+      <h1>历史节目</h1>
+      <p>这里只列出音频已就绪、可以直接收听的单集。共 {totalEpisodes} 集，每页 {PAGE_SIZE} 集。</p>
+    </section>
+    <EpisodeArchive episodes={episodes} page={page} totalPages={totalPages} />
+  </main>
+</BaseLayout>

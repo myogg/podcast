@@ -1,15 +1,17 @@
 import rss from "@astrojs/rss";
 import { getCollection } from "astro:content";
 import type { APIRoute } from "astro";
-import { headAudio, sortEpisodes } from "../lib/episodes";
+import { episodesWithAudio, sortEpisodes } from "../lib/episodes";
 
 export const GET: APIRoute = async (context) => {
   const episodes = sortEpisodes(await getCollection("post"));
-  const checked = await Promise.all(episodes.map(async (episode) => ({ episode, audio: await headAudio(episode.audioUrl) })));
-  const publishable = checked.filter((item): item is { episode: (typeof checked)[number]["episode"]; audio: NonNullable<(typeof checked)[number]["audio"]> } => item.audio !== null);
+  const publishable = await episodesWithAudio(episodes);
 
-  for (const { episode, audio } of checked) {
-    if (!audio) console.warn(`[podcast] skip ${episode.slug}: Content-Length unavailable for ${episode.audioUrl}`);
+  const publishableSlugs = new Set(publishable.map(({ episode }) => episode.slug));
+  for (const episode of episodes) {
+    if (!publishableSlugs.has(episode.slug)) {
+      console.warn(`[podcast] skip ${episode.slug}: Content-Length unavailable for ${episode.audioUrl}`);
+    }
   }
 
   const response = await rss({
