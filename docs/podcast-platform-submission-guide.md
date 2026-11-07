@@ -1,4 +1,4 @@
-# 姜小小的播客：主流平台提交指南
+# 姜一一的播客：主流平台提交指南
 
 正式网站：<https://r.134688.xyz>
 
@@ -8,7 +8,7 @@ RSS Feed：<https://r.134688.xyz/podcast.xml>
 
 ## 提交前先检查
 
-目前正式 RSS 已经可以访问，节目名称是“姜小小的播客”，并且每个已发布单集都有音频 URL、真实文件大小和 `audio/mpeg` 类型。Apple 要求 RSS 是公开可访问的 RSS 2.0 Feed；每期节目需要唯一的 `enclosure`，同时包含 URL、`length` 和 `type`，还需要稳定不变的 GUID。音频服务器还应支持 HTTP HEAD 和 byte-range 请求。[1]
+目前正式 RSS 已经可以访问，节目名称是“姜一一的播客”，并且每个已发布单集都有音频 URL、真实文件大小和 `audio/mpeg` 类型。Apple 要求 RSS 是公开可访问的 RSS 2.0 Feed；每期节目需要唯一的 `enclosure`，同时包含 URL、`length` 和 `type`，还需要稳定不变的 GUID。音频服务器还应支持 HTTP HEAD 和 byte-range 请求。[1]
 
 先用 Apple 播客 App 做一次个人预览：在 iPhone 的“播客”App 中打开“资料库”→右上角“编辑”→“通过 URL 关注节目”，输入 RSS 地址。这个操作只用于测试，不会把节目发布到 Apple 目录。[2]
 
@@ -68,7 +68,7 @@ Spotify 的入口是 [Spotify for Creators](https://creators.spotify.com/)。Spo
 
 如果后台提供 RSS 导入：
 
-1. 创建或认领节目“姜小小的播客”。
+1. 创建或认领节目“姜一一的播客”。
 2. 粘贴 `https://r.134688.xyz/podcast.xml`。
 3. 检查封面、节目简介和单集列表。
 4. 按后台要求完成邮箱或人工审核。

@@ -15,10 +15,10 @@ export const GET: APIRoute = async (context) => {
   }
 
   const response = await rss({
-    title: "姜小小的播客",
-    description: "姜小小的播客，记录值得反复聆听的中文声音。",
+    title: "姜一一的播客",
+    description: "姜一一的播客，记录值得反复聆听的中文声音。",
     site: context.site || import.meta.env.PUBLIC_SITE_URL || "https://r.134688.xyz",
-    customData: "<language>zh-CN</language><image><url>https://r.134688.xyz/jiang-podcast-cover.png</url><title>姜小小的播客</title><link>https://r.134688.xyz/</link></image><itunes:image href=\"https://r.134688.xyz/jiang-podcast-cover.png\"/><itunes:author>姜小小</itunes:author><itunes:owner><itunes:name>姜小小</itunes:name><itunes:email>xxjss@163.com</itunes:email></itunes:owner><itunes:type>episodic</itunes:type><itunes:category text=\"Arts\"/><itunes:explicit>false</itunes:explicit>",
+    customData: "<language>zh-CN</language><image><url>https://r.134688.xyz/jiang-podcast-cover.png</url><title>姜一一的播客</title><link>https://r.134688.xyz/</link></image><itunes:image href=\"https://r.134688.xyz/jiang-podcast-cover.png\"/><itunes:author>姜一一</itunes:author><itunes:owner><itunes:name>姜一一</itunes:name><itunes:email>xxjss@163.com</itunes:email></itunes:owner><itunes:type>episodic</itunes:type><itunes:category text=\"Arts\"/><itunes:explicit>false</itunes:explicit>",
     items: publishable.map(({ episode, audio }) => ({
       title: episode.title,
       description: episode.description,

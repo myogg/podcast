@@ -6,7 +6,7 @@ import "../styles/global.css";
 interface Props { episode: Episode; audioSize?: number; }
 const { episode, audioSize } = Astro.props;
 ---
-<BaseLayout title={`${episode.title} · 姜小小的播客`} description={episode.description} image={episode.image} type="article">
+<BaseLayout title={`${episode.title} · 姜一一的播客`} description={episode.description} image={episode.image} type="article">
   <main class="detail-hero">
     <div class="detail-grid">
       <img class="detail-cover" id="episode-cover" src={episode.image} alt={episode.title} loading="eager" />
