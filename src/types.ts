@@ -9,6 +9,7 @@ export interface Env {
   PUBLIC_BASE_URL?: string;
   TTS_VOICE?: string;
   MIMO_API_KEY?: string;
+  PODCAST_TEST_TOKEN?: string;
   MIMO_TTS_VOICE?: string;
   TTS_RATE?: string;
   EDGE_CHROMIUM_VERSION?: string;
