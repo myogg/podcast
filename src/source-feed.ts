@@ -3,7 +3,7 @@ import { fetchSourceResponse, validateSourceUrl } from "./source-url";
 import type { Env, SourceItem } from "./types";
 
 const MAX_FEED_BYTES = 1_500_000;
-const MAX_FEED_ITEMS = 100;
+const MAX_FEED_ITEMS = 400;
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",

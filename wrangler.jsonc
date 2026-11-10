@@ -34,7 +34,7 @@
     "TTS_VOICE": "zh-CN-XiaoxiaoNeural",
     "TTS_RATE": "default",
     "EDGE_CHROMIUM_VERSION": "143.0.3650.75",
-    "MAX_EPISODES_PER_RUN": "1",
-    "INITIAL_BACKFILL_COUNT": "0"
+    "MAX_EPISODES_PER_RUN": "5",
+    "INITIAL_BACKFILL_COUNT": "400"
   }
 }

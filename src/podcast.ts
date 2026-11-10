@@ -3,7 +3,7 @@ import { fetchSourceItems } from "./source-feed";
 import { characterLimit, synthesizeArticle } from "./tts";
 import type { EpisodeRow, Env, SourceItem } from "./types";
 
-const MAX_FEED_ITEMS = 100;
+const MAX_FEED_ITEMS = 400;
 const MAX_ATTEMPTS = 5;
 const CRON_LEASE_MS = 20 * 60 * 1000;
 
@@ -43,7 +43,7 @@ async function insertBaseline(
   env: Env,
   items: SourceItem[],
 ): Promise<{ backfillCount: number; inserted: number }> {
-  const backfillCount = integerSetting(env.INITIAL_BACKFILL_COUNT, 0, 0, 20);
+  const backfillCount = integerSetting(env.INITIAL_BACKFILL_COUNT, 0, 0, 400);
   const now = new Date().toISOString();
   let inserted = 0;
 

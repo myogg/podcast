@@ -7,7 +7,7 @@
 - **Cloudflare Worker**：提供播客网站、JSON API、RSS feed、音频读取路由和定时任务。
 - **R2**：私有保存最终 MP3。项目不开放 R2 的匿名写入，也不需要把 R2 Access Key 放进代码。
 - **D1**：保存文章去重、生成状态、重试次数和 Cron 租约。
-- **Cron Trigger**：`0 */4 * * *`，每 4 小时检查一次。Cloudflare Cron 按 UTC 运行；换算成北京时间是每天 08:00、12:00、16:00、20:00、次日 00:00 和 04:00。新文章会在下一次检查时开始生成。默认每次最多处理 1 集，剩余队列留给之后的 Cron。
+- **Cron Trigger**：`0 */4 * * *`，每 4 小时检查一次。Cloudflare Cron 按 UTC 运行；换算成北京时间是每天 08:00、12:00、16:00、20:00、次日 00:00 和 04:00。首次运行会把 RSS 中最多 400 篇文章排入历史回填队列；默认每轮顺序处理 5 集，后续队列留给下一轮 Cron。
 - **TTS**：在 Worker 内直接实现 Edge TTS WebSocket 客户端，默认普通话女声 `zh-CN-XiaoxiaoNeural`。不调用 AI，也不依赖旧版 `@echristian/edge-tts` npm 包或其他转发服务。
 
 R2 桶默认保持私有。网站通过 Worker 的 `/audio/{slug}` 路由读取音频；没有任何公开上传接口。RSS item 的音频 enclosure 使用播客网站自身的 URL。
@@ -37,9 +37,9 @@ Worker 从 Astro RSS 读取标题、链接、发布时间和摘要。当前 RSS 
 
 ## 首次启动行为
 
-为避免第一次部署就把博客里的全部历史文章合成成几百集，首次运行会把当前 RSS 中已有文章登记为基线，不生成音频。此后新出现的文章会进入待处理队列。
+首次运行会将当前 RSS 中最多 400 篇文章登记到 D1。`INITIAL_BACKFILL_COUNT` 指定其中排入回填队列的文章数；当前配置为 `400`，因此符合条件的历史文章会开始生成。注意 RSS 源和 Worker 都最多处理 400 条，且 RSS 响应大小仍限制为 1.5 MB；应在首次 Cron 日志中确认实际登记数量。
 
-如果希望首次部署时顺带生成最近几篇，把 `wrangler.jsonc` 中的 `INITIAL_BACKFILL_COUNT` 改成需要的数量（默认 `0`）。每次 Cron 最多处理 `MAX_EPISODES_PER_RUN` 篇（默认 `1`）。
+每次 Cron 最多顺序合成 `MAX_EPISODES_PER_RUN` 篇（当前为 `5`）。约 300 篇按每轮 5 集、每天 6 轮计算，理想情况下约需 10 天；实际时间会受 TTS 响应、Cloudflare 执行限制和失败重试影响。若 Microsoft TTS 开始限流或 Worker 日志出现超时，应把该值调低。
 
 D1 `cron_lock` 租约防止手动触发和 Cron 重叠时重复合成；过期的 `processing` 任务会在下一轮恢复。单集最多尝试 5 次；第五次失败后状态变为 `failed`，不再自动重试。排查后可在 D1 Console 或 Wrangler 执行以下 SQL 手动重置：
 
