@@ -378,7 +378,7 @@ type MiMoResponse = {
 };
 
 function decodeBase64Audio(value: string): Uint8Array {
-  const normalized = value.replace(/\\s+/g, "");
+  const normalized = value.replace(/\s+/g, "");
   const binary = atob(normalized);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
