@@ -28,16 +28,30 @@ function validBearerToken(request: Request, expected: string): boolean {
   return difference === 0;
 }
 
-async function listEpisodes(env: Env): Promise<EpisodeRow[]> {
+async function listEpisodes(env: Env): Promise<Array<{
+  slug: string;
+  title: string;
+  publishedAt: string;
+  summary: string;
+  sourceUrl: string;
+  audioUrl: string;
+}>> {
   const result = await env.DB.prepare(
-    `SELECT slug, title, source_url, published_at, summary, status, audio_key,
-            audio_bytes, attempts, last_error, created_at, updated_at
+    `SELECT slug, title, source_url, published_at, summary
        FROM episodes
       WHERE status = 'published'
       ORDER BY published_at DESC
       LIMIT 100`,
-  ).all<EpisodeRow>();
-  return result.results;
+  ).all<Pick<EpisodeRow, "slug" | "title" | "source_url" | "published_at" | "summary">>();
+
+  return result.results.map((episode) => ({
+    slug: episode.slug,
+    title: episode.title,
+    publishedAt: episode.published_at,
+    summary: episode.summary,
+    sourceUrl: episode.source_url,
+    audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
+  }));
 }
 
 async function serveAudio(request: Request, env: Env, slug: string): Promise<Response> {
