@@ -96,6 +96,55 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
 
+  if (url.pathname === "/admin/run" && request.method === "GET") {
+    const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>播客手动处理</title>
+<style>
+body{font:16px system-ui,sans-serif;max-width:520px;margin:40px auto;padding:0 18px;color:#222}
+input,button{box-sizing:border-box;width:100%;padding:13px;margin:8px 0;border:1px solid #bbb;border-radius:8px;font-size:16px}
+button{background:#222;color:#fff;border:0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f3f3;padding:12px;border-radius:8px}
+small{color:#666}
+</style>
+</head>
+<body>
+<h2>播客手动处理</h2>
+<p>输入你在 Cloudflare 中设置的 MANUAL_TRIGGER_SECRET。密钥只在本次页面内存中使用，不会写入网址。</p>
+<form id="run">
+<input id="secret" type="password" autocomplete="off" placeholder="手动触发密钥" required>
+<button id="submit" type="submit">立即处理最多 5 篇</button>
+</form>
+<small>处理期间请不要关闭页面。完成后到 D1 查询 episodes 状态。</small>
+<pre id="result">等待操作</pre>
+<script>
+document.getElementById("run").addEventListener("submit",async(event)=>{
+ event.preventDefault();
+ const button=document.getElementById("submit");
+ const output=document.getElementById("result");
+ button.disabled=true;output.textContent="正在处理，请稍候……";
+ try{
+  const response=await fetch("/api/admin/process",{method:"POST",headers:{Authorization:"Bearer "+document.getElementById("secret").value}});
+  const body=await response.text();
+  output.textContent="HTTP "+response.status+"\\n"+body;
+ }catch(error){output.textContent="请求失败："+String(error);}
+ finally{button.disabled=false;}
+});
+</script>
+</body>
+</html>`;
+    return new Response(html, {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  }
+
   if (url.pathname === "/api/admin/process") {
     if (request.method !== "POST") {
       return json({ ok: false, error: "Method not allowed; use POST" }, 405);
