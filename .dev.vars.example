@@ -1,0 +1,3 @@
+# 本项目不需要 R2 S3 密钥或 TTS API Key；R2 使用 Worker binding，TTS 握手在 Worker 内执行。
+# 如更换文章源域名，SOURCE_RSS_URL 与 ALLOWED_SOURCE_HOSTS 必须相符。
+# EDGE_CHROMIUM_VERSION 与 TTS User-Agent 主版本一起更新，详见 README。

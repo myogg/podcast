@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f0e8" />
+    <meta name="description" content="把 134688.xyz 的新文章，自动变成可收听的播客。" />
+    <link rel="icon" href="/cover.svg" type="image/svg+xml" />
+    <link rel="alternate" type="application/rss+xml" title="姜一一的博客播客" href="/feed.xml" />
+    <link rel="stylesheet" href="/styles.css" />
+    <title>姜一一的博客播客</title>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="播客首页">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span>博客播客</span>
+        </a>
+        <a class="subscribe-link" href="/feed.xml">
+          <span class="rss-mark" aria-hidden="true">◔</span>
+          <span>订阅节目</span>
+        </a>
+      </header>
+
+      <main>
+        <section class="hero" aria-labelledby="page-title">
+          <div class="hero-copy">
+            <p class="eyebrow"><span class="live-dot"></span> FROM 134688.XYZ</p>
+            <h1 id="page-title">把文字，<br /><em>留给耳朵。</em></h1>
+            <p class="hero-description">每篇新文章，都有一段声音。这里收录姜一一博客文章的原文朗读，不改写，不加旁白。</p>
+            <div class="hero-actions">
+              <a class="button button-dark" href="#episodes">开始收听 <span aria-hidden="true">↓</span></a>
+              <a class="text-link" href="https://134688.xyz/" target="_blank" rel="noopener noreferrer">回到博客 <span aria-hidden="true">↗</span></a>
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="disc"><div class="disc-center"><span class="brand-mark large"><i></i><i></i><i></i><i></i><i></i></span></div></div>
+            <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+            <p class="art-caption">WORDS<br />IN MOTION</p>
+            <span class="art-index">001 — ON AIR</span>
+          </div>
+        </section>
+
+        <section class="episode-section" id="episodes" aria-labelledby="episodes-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">THE ARCHIVE</p>
+              <h2 id="episodes-title">最近的节目</h2>
+            </div>
+            <div class="section-meta"><span id="episode-count">—</span><span class="meta-divider"></span><span>每 4 小时更新</span></div>
+          </div>
+          <div id="episode-list" class="episode-list" aria-live="polite">
+            <div class="loading-state"><span class="loading-pulse"></span> 正在读取节目单</div>
+          </div>
+          <div id="empty-state" class="empty-state" hidden>
+            <div class="empty-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <h3>第一段声音，正在路上</h3>
+            <p>系统每四小时检查一次博客。新文章会自动生成节目并出现在这里。</p>
+            <a href="https://134688.xyz/" target="_blank" rel="noopener noreferrer">去博客读一篇 <span aria-hidden="true">↗</span></a>
+          </div>
+          <p id="error-state" class="error-state" hidden>节目单暂时没有加载成功，请稍后刷新页面。</p>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="footer-brand"><span class="brand-mark small" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span>姜一一的博客播客</span></div>
+        <p>新文章 · 原文朗读 · 每四小时自动检查</p>
+        <a href="/feed.xml">RSS FEED <span aria-hidden="true">↗</span></a>
+      </footer>
+    </div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

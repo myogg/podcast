@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "134688-blog-podcast",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-10",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*", "/feed.xml", "/audio/*"]
+  },
+  "triggers": {
+    "crons": ["0 */4 * * *"]
+  },
+  "r2_buckets": [
+    {
+      "binding": "AUDIO_BUCKET",
+      "bucket_name": "134688-podcast-audio"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "blogcast-db",
+      "database_id": "00000000000000000000000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "SOURCE_RSS_URL": "https://134688.xyz/rss.xml",
+    "ALLOWED_SOURCE_HOSTS": "134688.xyz,www.134688.xyz",
+    "SITE_TITLE": "姜一一的博客播客",
+    "SITE_DESCRIPTION": "把 134688.xyz 的新文章，自动变成可收听的播客。",
+    "TTS_VOICE": "zh-CN-XiaoxiaoNeural",
+    "TTS_RATE": "default",
+    "EDGE_CHROMIUM_VERSION": "143.0.3650.75",
+    "MAX_EPISODES_PER_RUN": "1",
+    "INITIAL_BACKFILL_COUNT": "0"
+  }
+}
