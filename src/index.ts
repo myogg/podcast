@@ -47,7 +47,7 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
   } catch {
     return new Response("Not found", { status: 404 });
   }
-  if (!decodedSlug || decodedSlug.includes("/") || decodedSlug.includes("\\\\")) {
+  if (!decodedSlug || decodedSlug.includes("/") || decodedSlug.includes("\\")) {
     return new Response("Not found", { status: 404 });
   }
 
