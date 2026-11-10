@@ -29,7 +29,7 @@
   "vars": {
     "SOURCE_RSS_URL": "https://134688.xyz/rss.xml",
     "ALLOWED_SOURCE_HOSTS": "134688.xyz,www.134688.xyz",
-    "SITE_TITLE": "姜一一的博客播客",
+    "SITE_TITLE": "姜一一的播客",
     "SITE_DESCRIPTION": "把 134688.xyz 的新文章，自动变成可收听的播客。",
     "TTS_VOICE": "zh-CN-XiaoxiaoNeural",
     "TTS_RATE": "default",
