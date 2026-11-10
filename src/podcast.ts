@@ -118,7 +118,7 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
       throw new Error(`Article is ${spokenText.length} characters; limit is ${characterLimit(env)}`);
     }
 
-    const audio = synthesizeArticle(spokenText, env);
+    const audio = await synthesizeArticle(spokenText, env);
     const storedObject = await env.AUDIO_BUCKET.put(audioKey, audio, {
       httpMetadata: {
         contentType: "audio/mpeg",
