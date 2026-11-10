@@ -90,6 +90,54 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  if (url.pathname === "/api/test/generate-one" && request.method === "POST") {
+    const expectedToken = env.PODCAST_TEST_TOKEN?.trim();
+    if (!expectedToken || expectedToken.length < 24) {
+      return json({ ok: false, error: "Manual test endpoint is not configured" }, 503);
+    }
+
+    const authorization = request.headers.get("Authorization") || "";
+    const suppliedToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7)
+      : "";
+    let tokenMatches = suppliedToken.length === expectedToken.length;
+    if (tokenMatches) {
+      let difference = 0;
+      for (let index = 0; index < expectedToken.length; index += 1) {
+        difference |= expectedToken.charCodeAt(index) ^ suppliedToken.charCodeAt(index);
+      }
+      tokenMatches = difference === 0;
+    }
+    if (!tokenMatches) return json({ ok: false, error: "Unauthorized" }, 401);
+
+    const startedAt = new Date().toISOString();
+    await pollAndProcess(env, 1);
+    const result = await env.DB.prepare(
+      `SELECT slug, title, status, audio_bytes, last_error, updated_at
+         FROM episodes
+        WHERE attempts > 0 AND updated_at >= ?
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+    )
+      .bind(startedAt)
+      .first<{
+        slug: string;
+        title: string;
+        status: string;
+        audio_bytes: number | null;
+        last_error: string | null;
+        updated_at: string;
+      }>();
+
+    return json({
+      ok: true,
+      result: result || null,
+      message: result
+        ? "One episode was processed; inspect status and Worker logs for the TTS provider."
+        : "No episode was processed. The RSS may be empty, there may be no pending item, or another Cron invocation may hold the lease.",
+    });
+  }
+
   if (url.pathname === "/api/episodes" && request.method === "GET") {
     return json({ episodes: await listEpisodes(env) });
   }
