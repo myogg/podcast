@@ -7,6 +7,37 @@ const MAX_FEED_ITEMS = 400;
 const MAX_ATTEMPTS = 5;
 const CRON_LEASE_MS = 20 * 60 * 1000;
 
+async function collectAudioBytes(
+  stream: ReadableStream<Uint8Array>,
+): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      totalBytes += value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (totalBytes === 0) {
+    throw new Error("TTS returned an empty audio file");
+  }
+
+  const audio = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    audio.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return audio;
+}
+
 function integerSetting(value: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < min) return fallback;
@@ -118,7 +149,8 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
       throw new Error(`Article is ${spokenText.length} characters; limit is ${characterLimit(env)}`);
     }
 
-    const audio = await synthesizeArticle(spokenText, env);
+    const audioStream = await synthesizeArticle(spokenText, env);
+    const audio = await collectAudioBytes(audioStream);
     const storedObject = await env.AUDIO_BUCKET.put(audioKey, audio, {
       httpMetadata: {
         contentType: "audio/mpeg",
