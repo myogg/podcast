@@ -154,7 +154,7 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
   }
 }
 
-export async function pollAndProcess(env: Env): Promise<void> {
+export async function pollAndProcess(env: Env, maxEpisodesOverride?: number): Promise<void> {
   const leaseUntil = await acquireCronLease(env);
   if (leaseUntil === null) {
     console.info("Skipping RSS poll; another Cron invocation holds the lease");
@@ -196,7 +196,9 @@ export async function pollAndProcess(env: Env): Promise<void> {
       console.info("new RSS items queued", inserted);
     }
 
-    const maxEpisodes = integerSetting(env.MAX_EPISODES_PER_RUN, 1, 1, 10);
+    const maxEpisodes = maxEpisodesOverride === undefined
+      ? integerSetting(env.MAX_EPISODES_PER_RUN, 1, 1, 10)
+      : integerSetting(String(maxEpisodesOverride), 1, 1, 1);
     const pending = await env.DB.prepare(
       `SELECT slug, title, source_url, published_at, summary, status, audio_key,
               audio_bytes, attempts, last_error, created_at, updated_at
