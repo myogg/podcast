@@ -27,7 +27,7 @@ export async function buildPodcastFeed(
   ).all<EpisodeRow>();
 
   const siteBase = (env.PUBLIC_BASE_URL || origin).replace(/\/+$/, "");
-  const title = env.SITE_TITLE || "姜一一的博客播客";
+  const title = env.SITE_TITLE || "姜一一的播客";
   const description = env.SITE_DESCRIPTION || "把 134688.xyz 的新文章，自动变成可收听的播客。";
   const updatedAt = result.results[0]?.updated_at || new Date().toISOString();
 
