@@ -6,6 +6,11 @@ const TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4";
 const DEFAULT_EDGE_VERSION = "143.0.3650.75";
 const DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural";
 const DEFAULT_CHUNK_LENGTH = 300;
+const MIMO_ENDPOINT = "https://api.xiaomimimo.com/v1/chat/completions";
+const MIMO_MODEL = "mimo-v2.5-tts";
+const DEFAULT_MIMO_VOICE = "mimo_default";
+const MIMO_CHUNK_LENGTH = 800;
+const MIMO_RESPONSE_TIMEOUT_MS = 90_000;
 const OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3";
 const TTS_RESPONSE_TIMEOUT_MS = 45_000;
 const AUDIO_SEPARATOR = new TextEncoder().encode("Path:audio\r\n");
@@ -325,7 +330,7 @@ function stripMp3Tags(bytes: Uint8Array): Uint8Array {
   return bytes.subarray(start, end);
 }
 
-export function synthesizeArticle(text: string, env: Env): ReadableStream<Uint8Array> {
+function synthesizeWithEdgeTts(text: string, env: Env): ReadableStream<Uint8Array> {
   const chunks = splitText(text);
   if (!chunks.length) throw new Error("No article text to synthesize");
   const voice = env.TTS_VOICE || DEFAULT_VOICE;
@@ -359,6 +364,138 @@ export function synthesizeArticle(text: string, env: Env): ReadableStream<Uint8A
       session?.close();
     },
   });
+}
+
+
+type MiMoResponse = {
+  choices?: Array<{
+    message?: {
+      audio?: {
+        data?: string;
+      };
+    };
+  }>;
+};
+
+function decodeBase64Audio(value: string): Uint8Array {
+  const normalized = value.replace(/\\s+/g, "");
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function looksLikeMp3(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) return true;
+  return bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+}
+
+async function synthesizeMiMoChunk(
+  text: string,
+  apiKey: string,
+  voice: string,
+): Promise<Uint8Array> {
+  const response = await fetch(MIMO_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": apiKey,
+    },
+    body: JSON.stringify({
+      model: MIMO_MODEL,
+      messages: [
+        {
+          role: "user",
+          content: "请使用自然、清晰、平稳的中文普通话朗读，语速适中，吐字清楚，适合中文播客旁白。请严格按照原文朗读，不要添加、删减或改写内容。",
+        },
+        {
+          role: "assistant",
+          content: text,
+        },
+      ],
+      audio: {
+        format: "mp3",
+        voice,
+      },
+      stream: false,
+    }),
+    signal: AbortSignal.timeout(MIMO_RESPONSE_TIMEOUT_MS),
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text().catch(() => "")).slice(0, 500);
+    throw new Error(`MiMo TTS HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
+  }
+
+  const result = (await response.json()) as MiMoResponse;
+  const encodedAudio = result.choices?.[0]?.message?.audio?.data;
+  if (!encodedAudio) throw new Error("MiMo TTS response did not contain audio data");
+
+  const audio = stripMp3Tags(decodeBase64Audio(encodedAudio));
+  if (!audio.byteLength || !looksLikeMp3(audio)) {
+    throw new Error("MiMo TTS returned invalid or empty MP3 data");
+  }
+  return audio;
+}
+
+async function synthesizeWithMiMo(text: string, env: Env): Promise<Uint8Array[]> {
+  const apiKey = env.MIMO_API_KEY?.trim();
+  if (!apiKey) throw new Error("MIMO_API_KEY is not configured");
+
+  const voice = (env.MIMO_TTS_VOICE || DEFAULT_MIMO_VOICE).trim();
+  if (!/^[A-Za-z0-9_\u4e00-\u9fff-]+$/.test(voice)) {
+    throw new Error("MIMO_TTS_VOICE contains unsupported characters");
+  }
+
+  const chunks = splitText(text, MIMO_CHUNK_LENGTH);
+  if (!chunks.length) throw new Error("No article text to synthesize with MiMo");
+
+  const audioParts: Uint8Array[] = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    const part = await synthesizeMiMoChunk(chunks[index], apiKey, voice);
+    audioParts.push(part);
+    console.info("MiMo TTS segment generated", index + 1, "/", chunks.length, part.byteLength);
+  }
+  return audioParts;
+}
+
+function streamAudioParts(parts: Uint8Array[]): ReadableStream<Uint8Array> {
+  let index = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index >= parts.length) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(parts[index]);
+      index += 1;
+    },
+  });
+}
+
+export async function synthesizeArticle(
+  text: string,
+  env: Env,
+): Promise<ReadableStream<Uint8Array>> {
+  if (env.MIMO_API_KEY?.trim()) {
+    try {
+      const parts = await synthesizeWithMiMo(text, env);
+      const totalBytes = parts.reduce((total, part) => total + part.byteLength, 0);
+      if (totalBytes <= 0) throw new Error("MiMo TTS produced an empty article");
+      console.info("MiMo TTS article generated", parts.length, "segments", totalBytes, "bytes");
+      return streamAudioParts(parts);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("MiMo TTS failed; falling back to Microsoft Edge TTS", message);
+    }
+  } else {
+    console.warn("MIMO_API_KEY is not configured; using Microsoft Edge TTS");
+  }
+
+  return synthesizeWithEdgeTts(text, env);
 }
 
 export function characterLimit(env: Env): number {
