@@ -12,6 +12,22 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+function validBearerToken(request: Request, expected: string): boolean {
+  const authorization = request.headers.get("Authorization") || "";
+  const prefix = "Bearer ";
+  if (!authorization.startsWith(prefix)) return false;
+
+  const suppliedBytes = new TextEncoder().encode(authorization.slice(prefix.length));
+  const expectedBytes = new TextEncoder().encode(expected);
+  if (suppliedBytes.length !== expectedBytes.length) return false;
+
+  let difference = 0;
+  for (let index = 0; index < suppliedBytes.length; index++) {
+    difference |= suppliedBytes[index] ^ expectedBytes[index];
+  }
+  return difference === 0;
+}
+
 async function listEpisodes(env: Env): Promise<EpisodeRow[]> {
   const result = await env.DB.prepare(
     `SELECT slug, title, source_url, published_at, summary, status, audio_key,
@@ -31,7 +47,7 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
   } catch {
     return new Response("Not found", { status: 404 });
   }
-  if (!decodedSlug || decodedSlug.includes("/") || decodedSlug.includes("\\")) {
+  if (!decodedSlug || decodedSlug.includes("/") || decodedSlug.includes("\\\\")) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -79,6 +95,31 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
+
+  if (url.pathname === "/api/admin/process") {
+    if (request.method !== "POST") {
+      return json({ ok: false, error: "Method not allowed; use POST" }, 405);
+    }
+    if (!env.MANUAL_TRIGGER_SECRET) {
+      return json({ ok: false, error: "Manual trigger is not configured" }, 503);
+    }
+    if (!validBearerToken(request, env.MANUAL_TRIGGER_SECRET)) {
+      return json({ ok: false, error: "Unauthorized" }, 401);
+    }
+
+    try {
+      await pollAndProcess(env);
+      return json({
+        ok: true,
+        message: "Processing run finished. Check D1 episodes for results.",
+        maxEpisodesPerRun: Number(env.MAX_EPISODES_PER_RUN) || 5,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Manual processing run failed", message);
+      return json({ ok: false, error: "Processing run failed", detail: message }, 500);
+    }
+  }
 
   if (url.pathname === "/api/health") {
     try {
