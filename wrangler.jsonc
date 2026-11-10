@@ -12,6 +12,12 @@
   "triggers": {
     "crons": ["0 */4 * * *"]
   },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true
+    }
+  },
   "r2_buckets": [
     {
       "binding": "AUDIO_BUCKET",
