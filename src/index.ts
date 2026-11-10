@@ -54,6 +54,38 @@ async function listEpisodes(env: Env): Promise<Array<{
   }));
 }
 
+type ByteRange =
+  | { offset: number; length?: number }
+  | { suffix: number };
+
+// 自己解析 Range 头，不把 request.headers 直接交给 R2 的 range 选项。
+// 传 Headers 时 R2 回显的 object.range.offset 会是 NaN，用它拼 Content-Range
+// 会得到 "bytes NaN-NaN/<size>"，浏览器 <audio> 直接报 MEDIA_ERR_SRC_NOT_SUPPORTED。
+function parseByteRange(value: string | null): ByteRange | "none" | "invalid" {
+  if (!value) return "none";
+  const match = /^bytes=(\d*)-(\d*)$/.exec(value.trim());
+  // 多段 Range (bytes=0-99,200-299) 或其它语法：忽略，回退完整 200 响应
+  if (!match) return "none";
+  const [, startText, endText] = match;
+  if (!startText && !endText) return "none";
+
+  if (!startText) {
+    const suffix = Number(endText);
+    return Number.isSafeInteger(suffix) && suffix > 0 ? { suffix } : "invalid";
+  }
+
+  const offset = Number(startText);
+  if (!Number.isSafeInteger(offset)) return "invalid";
+  if (!endText) return { offset };
+
+  const last = Number(endText);
+  if (!Number.isSafeInteger(last) || last < offset) return "invalid";
+  return { offset, length: last - offset + 1 };
+}
+
+// 修改响应头版本后递增，强制浏览器/CDN 丢弃之前缓存的坏 206 响应。
+const AUDIO_RESPONSE_VERSION = "2";
+
 async function serveAudio(request: Request, env: Env, slug: string): Promise<Response> {
   let decodedSlug: string;
   try {
@@ -72,35 +104,50 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
     .first<{ audio_key: string | null }>();
   if (!episode?.audio_key) return new Response("Not found", { status: 404 });
 
-  const object = await env.AUDIO_BUCKET.get(episode.audio_key, {
-    range: request.headers,
-  });
+  const parsed = parseByteRange(request.headers.get("Range"));
+  const range: ByteRange | undefined =
+    parsed === "none" || parsed === "invalid" ? undefined : parsed;
+
+  const object = range
+    ? await env.AUDIO_BUCKET.get(episode.audio_key, { range })
+    : await env.AUDIO_BUCKET.get(episode.audio_key);
   if (!object) return new Response("Not found", { status: 404 });
 
+  const size = object.size;
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("Accept-Ranges", "bytes");
   headers.set("Content-Type", "audio/mpeg");
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
-  headers.set("ETag", object.httpEtag);
+  headers.set("Cache-Control", "public, max-age=86400");
+  headers.set(
+    "ETag",
+    `"${object.httpEtag.replace(/^"|"$/g, "")}-v${AUDIO_RESPONSE_VERSION}"`,
+  );
 
   let status = 200;
-  if (object.range) {
-    const range = object.range;
+  let contentLength = size;
+
+  if (range) {
     const offset = "suffix" in range
-      ? Math.max(0, object.size - range.suffix)
-      : range.offset ?? 0;
-    const length = "suffix" in range
-      ? Math.min(range.suffix, object.size)
-      : range.length ?? object.size - offset;
-    const end = offset + length - 1;
-    headers.set("Content-Range", `bytes ${offset}-${end}/${object.size}`);
-    headers.set("Content-Length", String(length));
+      ? Math.max(0, size - range.suffix)
+      : range.offset;
+    const requested = "suffix" in range
+      ? Math.min(range.suffix, size)
+      : range.length ?? size - offset;
+
+    if (offset >= size) {
+      headers.set("Content-Range", `bytes */${size}`);
+      headers.set("Content-Length", "0");
+      return new Response(null, { status: 416, headers });
+    }
+
+    const length = Math.max(0, Math.min(requested, size - offset));
+    headers.set("Content-Range", `bytes ${offset}-${offset + length - 1}/${size}`);
+    contentLength = length;
     status = 206;
-  } else {
-    headers.set("Content-Length", String(object.size));
   }
 
+  headers.set("Content-Length", String(contentLength));
   return new Response(request.method === "HEAD" ? null : object.body, {
     status,
     headers,
