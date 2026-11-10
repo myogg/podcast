@@ -22,7 +22,7 @@
     {
       "binding": "DB",
       "database_name": "blogcast-db",
-      "database_id": "00000000000000000000000000000000",
+      "database_id": "89d12605-5956-4e49-bc94-47f96583e000",
       "migrations_dir": "migrations"
     }
   ],
