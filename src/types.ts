@@ -35,6 +35,9 @@ export interface EpisodeRow {
   status: "baseline" | "pending" | "processing" | "published" | "failed";
   audio_key: string | null;
   audio_bytes: number | null;
+  tts_provider: string | null;
+  audio_size: number | null;
+  duration_seconds: number | null;
   attempts: number;
   last_error: string | null;
   created_at: string;
