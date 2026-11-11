@@ -32,7 +32,7 @@
     "SITE_TITLE": "姜一一的播客",
     "SITE_DESCRIPTION": "把 134688.xyz 的新文章，自动变成可收听的播客。",
     "TTS_VOICE": "zh-CN-XiaoxiaoNeural",
-    "MIMO_TTS_VOICE": "mimo_default",
+    "MIMO_TTS_VOICE": "白桦",
     "TTS_RATE": "default",
     "EDGE_CHROMIUM_VERSION": "143.0.3650.75",
     "MAX_EPISODES_PER_RUN": "5",

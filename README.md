@@ -8,7 +8,7 @@
 - **R2**：私有保存最终 MP3。项目不开放 R2 的匿名写入，也不需要把 R2 Access Key 放进代码。
 - **D1**：保存文章去重、生成状态、重试次数和 Cron 租约。
 - **Cron Trigger**：`0 */4 * * *`，每 4 小时检查一次。Cloudflare Cron 按 UTC 运行；换算成北京时间是每天 08:00、12:00、16:00、20:00、次日 00:00 和 04:00。首次运行会把 RSS 中最多 400 篇文章排入历史回填队列；默认每轮顺序处理 5 集，后续队列留给下一轮 Cron。
-- **TTS**：配置 `MIMO_API_KEY` 时优先使用 MiMo TTS；未配置或 MiMo 请求失败时回退到 Worker 内直接实现的 Edge TTS WebSocket 客户端，默认普通话女声 `zh-CN-XiaoxiaoNeural`。不依赖旧版 `@echristian/edge-tts` npm 包或其他转发服务。
+- **TTS**：配置 `MIMO_API_KEY` 时优先使用 MiMo TTS，默认预置音色为中文男声 `白桦`；未配置或 MiMo 请求失败时回退到 Worker 内直接实现的 Edge TTS WebSocket 客户端，默认普通话女声 `zh-CN-XiaoxiaoNeural`。不依赖旧版 `@echristian/edge-tts` npm 包或其他转发服务。更改默认音色只影响之后新合成的节目，不会自动重做 R2 中已经生成的音频。
 
 R2 桶默认保持私有。网站通过 Worker 的 `/audio/{slug}` 路由读取音频；没有任何公开上传接口。RSS item 的音频 enclosure 使用播客网站自身的 URL。
 
