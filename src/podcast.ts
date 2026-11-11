@@ -1,6 +1,6 @@
 import { fetchArticleContent } from "./article";
 import { fetchSourceItems } from "./source-feed";
-import { characterLimit, synthesizeArticle } from "./tts";
+import { characterLimit, measureMp3DurationSeconds, synthesizeArticle } from "./tts";
 import type { EpisodeRow, Env, SourceItem } from "./types";
 
 const MAX_FEED_ITEMS = 400;
@@ -170,10 +170,11 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
     if (existingObject && existingObject.size > 0) {
       await env.DB.prepare(
         `UPDATE episodes
-            SET status = 'published', audio_key = ?, audio_bytes = ?, last_error = NULL, updated_at = ?
+            SET status = 'published', audio_key = ?, audio_bytes = ?, audio_size = ?,
+                last_error = NULL, updated_at = ?
           WHERE slug = ? AND status = 'processing'`,
       )
-        .bind(audioKey, existingObject.size, new Date().toISOString(), episode.slug)
+        .bind(audioKey, existingObject.size, existingObject.size, new Date().toISOString(), episode.slug)
         .run();
       return;
     }
@@ -183,8 +184,10 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
       throw new Error(`Article is ${spokenText.length} characters; limit is ${characterLimit(env)}`);
     }
 
-    const audioStream = await synthesizeArticle(spokenText, env);
-    const audio = await collectAudioBytes(audioStream);
+    const synthesized = await synthesizeArticle(spokenText, env);
+    const audio = await collectAudioBytes(synthesized.audio);
+    // 拼接后的 MP3 头部只描述第一段的时长，这里按帧重算真实总时长。
+    const durationSeconds = measureMp3DurationSeconds(audio) || null;
     const storedObject = await env.AUDIO_BUCKET.put(audioKey, audio, {
       httpMetadata: {
         contentType: "audio/mpeg",
@@ -199,13 +202,26 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
 
     await env.DB.prepare(
       `UPDATE episodes
-          SET status = 'published', audio_key = ?, audio_bytes = ?, last_error = NULL, updated_at = ?
+          SET status = 'published', audio_key = ?, audio_bytes = ?, audio_size = ?,
+              tts_provider = ?, duration_seconds = ?, last_error = NULL, updated_at = ?
         WHERE slug = ? AND status = 'processing'`,
     )
-      .bind(audioKey, storedObject.size, new Date().toISOString(), episode.slug)
+      .bind(
+        audioKey,
+        storedObject.size,
+        storedObject.size,
+        synthesized.provider,
+        durationSeconds,
+        new Date().toISOString(),
+        episode.slug,
+      )
       .run();
 
-    console.info("episode published", episode.slug, storedObject.size);
+    console.info("episode published", episode.slug, {
+      size: storedObject.size,
+      durationSeconds,
+      provider: synthesized.provider,
+    });
   } catch (error) {
     const status = attempt >= MAX_ATTEMPTS ? "failed" : "pending";
     const message = error instanceof Error ? error.message : String(error);

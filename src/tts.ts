@@ -393,6 +393,78 @@ function looksLikeMp3(bytes: Uint8Array): boolean {
   return bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
 }
 
+// MPEG Layer III 比特率表（kbps），index 0 与 15 为保留值。
+const MPEG1_L3_BITRATES = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const MPEG2_L3_BITRATES = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
+// versionBits: 3 = MPEG1, 2 = MPEG2, 0 = MPEG2.5
+const MPEG_SAMPLE_RATES: Record<number, number[]> = {
+  3: [44100, 48000, 32000],
+  2: [22050, 24000, 16000],
+  0: [11025, 12000, 8000],
+};
+
+type Mp3Frame = {
+  frameLength: number;
+  samplesPerFrame: number;
+  sampleRate: number;
+};
+
+// 解析一个 MPEG Layer III 帧头。Edge TTS 与 MiMo 输出的都是 Layer III，
+// 其它 layer / 保留版本返回 null，让扫描器逐字节重新同步。
+function readMp3Frame(bytes: Uint8Array, offset: number): Mp3Frame | null {
+  if (offset + 4 > bytes.length) return null;
+  const b1 = bytes[offset + 1];
+  const b2 = bytes[offset + 2];
+  if (bytes[offset] !== 0xff || (b1 & 0xe0) !== 0xe0) return null;
+
+  const versionBits = (b1 >> 3) & 0x03;
+  const layerBits = (b1 >> 1) & 0x03;
+  if (versionBits === 1 || layerBits !== 1) return null;
+
+  const bitrateIndex = (b2 >> 4) & 0x0f;
+  const sampleRateIndex = (b2 >> 2) & 0x03;
+  if (bitrateIndex === 0 || bitrateIndex === 15 || sampleRateIndex === 3) return null;
+
+  const sampleRate = MPEG_SAMPLE_RATES[versionBits]?.[sampleRateIndex];
+  const bitrateKbps = (versionBits === 3 ? MPEG1_L3_BITRATES : MPEG2_L3_BITRATES)[bitrateIndex];
+  if (!sampleRate || !bitrateKbps) return null;
+
+  const padding = (b2 >> 1) & 0x01;
+  const mpeg1 = versionBits === 3;
+  const frameLength =
+    Math.floor(((mpeg1 ? 144 : 72) * bitrateKbps * 1000) / sampleRate) + padding;
+  if (frameLength < 4) return null;
+
+  return {
+    frameLength,
+    samplesPerFrame: mpeg1 ? 1152 : 576,
+    sampleRate,
+  };
+}
+
+// 逐帧累加时长，不采信拼接后残留在第一段的 Xing/Info 头。
+// 多段 MP3 直接串接时，首个头部里的帧数只覆盖该段，播放器据此显示的总时长
+// 会明显偏短；这里按帧头重算真实时长，结果写入 D1 供 <itunes:duration> 使用。
+export function measureMp3DurationSeconds(bytes: Uint8Array): number {
+  let offset = 0;
+  let seconds = 0;
+  let frames = 0;
+
+  while (offset + 4 <= bytes.length) {
+    const frame = readMp3Frame(bytes, offset);
+    if (frame && offset + frame.frameLength <= bytes.length) {
+      seconds += frame.samplesPerFrame / frame.sampleRate;
+      frames += 1;
+      offset += frame.frameLength;
+    } else {
+      // 段边界、ID3 残留或噪声：逐字节找回下一个帧同步。
+      offset += 1;
+    }
+  }
+
+  return frames > 0 ? Math.max(1, Math.round(seconds)) : 0;
+}
+
 async function synthesizeMiMoChunk(
   text: string,
   apiKey: string,
@@ -476,17 +548,24 @@ function streamAudioParts(parts: Uint8Array[]): ReadableStream<Uint8Array> {
   });
 }
 
+export type TtsProvider = "mimo" | "edge";
+
+export interface SynthesizedArticle {
+  audio: ReadableStream<Uint8Array>;
+  provider: TtsProvider;
+}
+
 export async function synthesizeArticle(
   text: string,
   env: Env,
-): Promise<ReadableStream<Uint8Array>> {
+): Promise<SynthesizedArticle> {
   if (env.MIMO_API_KEY?.trim()) {
     try {
       const parts = await synthesizeWithMiMo(text, env);
       const totalBytes = parts.reduce((total, part) => total + part.byteLength, 0);
       if (totalBytes <= 0) throw new Error("MiMo TTS produced an empty article");
       console.info("MiMo TTS article generated", parts.length, "segments", totalBytes, "bytes");
-      return streamAudioParts(parts);
+      return { audio: streamAudioParts(parts), provider: "mimo" };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn("MiMo TTS failed; falling back to Microsoft Edge TTS", message);
@@ -495,7 +574,7 @@ export async function synthesizeArticle(
     console.warn("MIMO_API_KEY is not configured; using Microsoft Edge TTS");
   }
 
-  return synthesizeWithEdgeTts(text, env);
+  return { audio: synthesizeWithEdgeTts(text, env), provider: "edge" };
 }
 
 export function characterLimit(env: Env): number {

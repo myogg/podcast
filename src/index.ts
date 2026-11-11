@@ -118,8 +118,8 @@ function parseByteRange(value: string | null): ByteRange | "none" | "invalid" {
   return { offset, length: last - offset + 1 };
 }
 
-// 修改响应头版本后递增，强制浏览器/CDN 丢弃之前缓存的坏 206 响应。
-const AUDIO_RESPONSE_VERSION = "2";
+// 修改响应头/缓存策略后递增，强制客户端重新校验之前缓存的音频响应。
+const AUDIO_RESPONSE_VERSION = "3";
 
 async function serveAudio(request: Request, env: Env, slug: string): Promise<Response> {
   let decodedSlug: string;
@@ -138,55 +138,70 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
     .bind(decodedSlug)
     .first<{ audio_key: string | null }>();
   if (!episode?.audio_key) return new Response("Not found", { status: 404 });
+  const audioKey = episode.audio_key;
+
+  // 先用 head 拿权威的完整对象大小。ranged get 回显的元数据曾导致
+  // "bytes NaN-NaN/<size>" 这类坏 Content-Range，这里不依赖它。
+  const head = await env.AUDIO_BUCKET.head(audioKey);
+  if (!head) return new Response("Not found", { status: 404 });
+  const size = head.size;
 
   const parsed = parseByteRange(request.headers.get("Range"));
+  // 多段 Range 或语法无效时按 RFC 9110 忽略 Range，回退完整 200 响应。
   const range: ByteRange | undefined =
     parsed === "none" || parsed === "invalid" ? undefined : parsed;
 
-  const object = range
-    ? await env.AUDIO_BUCKET.get(episode.audio_key, { range })
-    : await env.AUDIO_BUCKET.get(episode.audio_key);
-  if (!object) return new Response("Not found", { status: 404 });
-
-  const size = object.size;
   const headers = new Headers();
-  object.writeHttpMetadata(headers);
+  head.writeHttpMetadata(headers);
   headers.set("Accept-Ranges", "bytes");
   headers.set("Content-Type", "audio/mpeg");
-  headers.set("Cache-Control", "public, max-age=86400");
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
   headers.set(
     "ETag",
-    `"${object.httpEtag.replace(/^"|"$/g, "")}-v${AUDIO_RESPONSE_VERSION}"`,
+    `"${head.httpEtag.replace(/^"|"$/g, "")}-v${AUDIO_RESPONSE_VERSION}"`,
   );
 
+  let offset = 0;
+  let length = size;
   let status = 200;
-  let contentLength = size;
 
   if (range) {
-    const offset = "suffix" in range
-      ? Math.max(0, size - range.suffix)
-      : range.offset;
-    const requested = "suffix" in range
-      ? Math.min(range.suffix, size)
-      : range.length ?? size - offset;
+    if ("suffix" in range) {
+      length = Math.min(range.suffix, size);
+      offset = size - length;
+    } else {
+      offset = range.offset;
+      length = Math.min(range.length ?? size - offset, size - offset);
+    }
 
-    if (offset >= size) {
+    if (offset >= size || length <= 0) {
       headers.set("Content-Range", `bytes */${size}`);
       headers.set("Content-Length", "0");
+      headers.set("Cache-Control", "no-store");
       return new Response(null, { status: 416, headers });
     }
 
-    const length = Math.max(0, Math.min(requested, size - offset));
     headers.set("Content-Range", `bytes ${offset}-${offset + length - 1}/${size}`);
-    contentLength = length;
     status = 206;
   }
 
-  headers.set("Content-Length", String(contentLength));
-  return new Response(request.method === "HEAD" ? null : object.body, {
-    status,
-    headers,
-  });
+  headers.set("Content-Length", String(length));
+
+  // HEAD 只需要响应头，不必读取对象体。
+  if (request.method === "HEAD") {
+    return new Response(null, { status, headers });
+  }
+
+  // 用解析后的 R2Range 取字节流，不把 request.headers 直接交给 R2。
+  const r2Range = range
+    ? ("suffix" in range ? { suffix: range.suffix } : { offset, length })
+    : undefined;
+  const object = r2Range
+    ? await env.AUDIO_BUCKET.get(audioKey, { range: r2Range })
+    : await env.AUDIO_BUCKET.get(audioKey);
+  if (!object || !("body" in object)) return new Response("Not found", { status: 404 });
+
+  return new Response(object.body, { status, headers });
 }
 
 async function handleRequest(request: Request, env: Env): Promise<Response> {
@@ -212,7 +227,7 @@ small{color:#666}
 <p>输入你在 Cloudflare 中设置的 MANUAL_TRIGGER_SECRET。密钥只在本次页面内存中使用，不会写入网址。</p>
 <form id="run">
 <input id="secret" type="password" autocomplete="off" placeholder="手动触发密钥" required>
-<button id="submit" type="submit">立即处理最多 5 篇</button>
+<button id="submit" type="submit">立即处理最多 2 篇</button>
 </form>
 <small>处理期间请不要关闭页面。完成后到 D1 查询 episodes 状态。</small>
 <pre id="result">等待操作</pre>
@@ -257,7 +272,7 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
       return json({
         ok: true,
         message: "Processing run finished. Check D1 episodes for results.",
-        maxEpisodesPerRun: Number(env.MAX_EPISODES_PER_RUN) || 5,
+        maxEpisodesPerRun: Number(env.MAX_EPISODES_PER_RUN) || 2,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
