@@ -39,6 +39,19 @@ async function resolveAudioSize(env: Env, episode: EpisodeRow): Promise<number> 
   }
 }
 
+// 0003 之前入库的老集没有 duration_seconds；按 128 kbps ≈ 16 KB/s 用真实
+// 字节数（含上面的 R2 head 兜底）估算，保证每个 item 都带时长标签、不留空。
+const ESTIMATED_BYTES_PER_SECOND = 16000;
+
+function resolveDurationSeconds(episode: EpisodeRow, audioSize: number): number {
+  const stored = episode.duration_seconds;
+  if (typeof stored === "number" && stored > 0) return stored;
+  if (audioSize > 0) {
+    return Math.max(1, Math.round(audioSize / ESTIMATED_BYTES_PER_SECOND));
+  }
+  return 1;
+}
+
 export async function buildPodcastFeed(
   env: Env,
   origin: string,
@@ -71,9 +84,9 @@ export async function buildPodcastFeed(
       const episodeUrl = `${siteBase}/episode/${encodeURIComponent(episode.slug)}`;
       const publishedDate = new Date(episode.published_at).toUTCString();
       const itemSummary = episode.summary || `原文朗读：${episode.title}`;
-      const durationTag = episode.duration_seconds && episode.duration_seconds > 0
-        ? `\n      <itunes:duration>${formatItunesDuration(episode.duration_seconds)}</itunes:duration>`
-        : "";
+      const durationTag = `\n      <itunes:duration>${formatItunesDuration(
+        resolveDurationSeconds(episode, audioSize),
+      )}</itunes:duration>`;
       return `
     <item>
       <title>${escapeXml(episode.title)}</title>
