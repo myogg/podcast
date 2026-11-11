@@ -7,6 +7,24 @@ const MAX_FEED_ITEMS = 400;
 const MAX_ATTEMPTS = 5;
 const CRON_LEASE_MS = 20 * 60 * 1000;
 const MIN_ARTICLE_CHARACTERS = 100;
+const URL_PATTERNS = [
+  /\b(?:https?:\/\/|ftp:\/\/|www\.)[^\s<>"'`，。！？；：、（）【】《》「」『』\u3400-\u9fff\u3000-\u303f\uff00-\uffef]+/giu,
+  /(?<![@a-z0-9_-])\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|cn|net|org|edu|gov|mil|int|io|ai|app|dev|xyz|uk|us|ca|au|jp|de|fr|info|biz|me|tv|tech|site|online|store|cloud|blog|co)(?::\d{1,5})?(?:[/?#][^\s<>"'`，。！？；：、（）【】《》「」『』\u3400-\u9fff\u3000-\u303f\uff00-\uffef]+)?/giu,
+];
+
+function removeUrlsForSpeech(text: string): string {
+  let result = text;
+  for (const pattern of URL_PATTERNS) {
+    result = result.replace(pattern, (match) => {
+      const trailing = match.match(/[.,!?;:，。！？；：、)）\]}】》」』]+$/u)?.[0] || "";
+      return ` ${trailing}`;
+    });
+  }
+  return result
+    .replace(/[\t \u00a0]{2,}/g, " ")
+    .replace(/[\t \u00a0]+([，。！？；：、])/g, "$1")
+    .trim();
+}
 
 async function collectAudioBytes(
   stream: ReadableStream<Uint8Array>,
@@ -160,7 +178,7 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
       return;
     }
 
-    const spokenText = `${episode.title}。${body}`;
+    const spokenText = removeUrlsForSpeech(`${episode.title}。${body}`);
     if (spokenText.length > characterLimit(env)) {
       throw new Error(`Article is ${spokenText.length} characters; limit is ${characterLimit(env)}`);
     }

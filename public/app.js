@@ -4,6 +4,15 @@ const error = document.querySelector("#error-state");
 const count = document.querySelector("#episode-count");
 const main = document.querySelector("main");
 const fallbackCover = "/cover.svg";
+
+document.addEventListener("play", (event) => {
+  const activePlayer = event.target;
+  if (!(activePlayer instanceof HTMLAudioElement)) return;
+  document.querySelectorAll("audio").forEach((player) => {
+    if (player !== activePlayer) player.pause();
+  });
+}, true);
+
 const dateFormatter = new Intl.DateTimeFormat("zh-CN", {
   year: "numeric",
   month: "long",
