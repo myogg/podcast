@@ -1,6 +1,6 @@
 # 姜一一的播客
 
-一个独立的 Cloudflare Worker 项目：每 4 小时检查 `https://134688.xyz/rss.xml`。发现新文章后抓取文章页正文，使用 Edge TTS 逐段朗读原文，合成 MP3 保存到 R2，并在网站与 `/feed.xml` 中发布新的一集。整个流程不调用 AI，也不改写文章。
+一个独立的 Cloudflare Worker 项目：每 4 小时检查 `https://134688.xyz/rss.xml`。发现新文章后抓取文章页正文，使用语音合成逐段朗读原文，合成 MP3 保存到 R2，并在网站与 `/feed.xml` 中发布新的一集。网站包含节目列表和 `/episode/{slug}` 详情页；不使用 AI 改写文章。
 
 ## 组成
 
@@ -8,7 +8,7 @@
 - **R2**：私有保存最终 MP3。项目不开放 R2 的匿名写入，也不需要把 R2 Access Key 放进代码。
 - **D1**：保存文章去重、生成状态、重试次数和 Cron 租约。
 - **Cron Trigger**：`0 */4 * * *`，每 4 小时检查一次。Cloudflare Cron 按 UTC 运行；换算成北京时间是每天 08:00、12:00、16:00、20:00、次日 00:00 和 04:00。首次运行会把 RSS 中最多 400 篇文章排入历史回填队列；默认每轮顺序处理 5 集，后续队列留给下一轮 Cron。
-- **TTS**：在 Worker 内直接实现 Edge TTS WebSocket 客户端，默认普通话女声 `zh-CN-XiaoxiaoNeural`。不调用 AI，也不依赖旧版 `@echristian/edge-tts` npm 包或其他转发服务。
+- **TTS**：配置 `MIMO_API_KEY` 时优先使用 MiMo TTS；未配置或 MiMo 请求失败时回退到 Worker 内直接实现的 Edge TTS WebSocket 客户端，默认普通话女声 `zh-CN-XiaoxiaoNeural`。不依赖旧版 `@echristian/edge-tts` npm 包或其他转发服务。
 
 R2 桶默认保持私有。网站通过 Worker 的 `/audio/{slug}` 路由读取音频；没有任何公开上传接口。RSS item 的音频 enclosure 使用播客网站自身的 URL。
 
@@ -33,11 +33,15 @@ Worker 从 Astro RSS 读取标题、链接、发布时间和摘要。当前 RSS 
 
 默认只允许 `134688.xyz` 与 `www.134688.xyz` 的 HTTPS URL。RSS 中的文章链接和每一跳重定向都会重新校验；RSS 文件限制为 1.5 MB，文章 HTML 限制为 5 MB。若更换文章源域名，必须同时更新 `SOURCE_RSS_URL` 和 `ALLOWED_SOURCE_HOSTS`。
 
-每篇文章生成一集。正文前会朗读文章标题；正文不会经过 AI 改写。文章链接会被校验并哈希成固定、路由安全的节目 ID，用作稳定去重标识。
+节目详情页会重新读取该集对应的文章页面，以显示全文；优先使用 `#article-content` 中的第一张图片作为头图，其次使用页面 `og:image`，都没有时回退到项目自带的 `/cover.svg`。头图仅在该集播放时缓慢旋转。文章正文和图片 URL 不会额外写入 D1，因此这项功能不需要新增 D1 列或执行新迁移；若原博客暂时不可访问，详情页会提示稍后重试。
+
+Worker 在确认实际文章正文后执行 100 字过滤：去掉空白后不足 100 个 Unicode 字符的文章会标记为内部 `baseline` 状态，不生成 TTS 音频、不出现在节目列表或播客 RSS 中，也不会在下一轮重复尝试。RSS 的 `description` 是摘要而非全文，因此过滤基于文章正文，不基于摘要；判断前需要读取一次文章页面。
+
+达到正文长度门槛的文章生成一集。正文前会朗读文章标题；正文不会经过 AI 改写。文章链接会被校验并哈希成固定、路由安全的节目 ID，用作稳定去重标识。播客 RSS 单集链接指向本站详情页，详情页提供原文链接。
 
 ## 首次启动行为
 
-首次运行会将当前 RSS 中最多 400 篇文章登记到 D1。`INITIAL_BACKFILL_COUNT` 指定其中排入回填队列的文章数；当前配置为 `400`，因此符合条件的历史文章会开始生成。注意 RSS 源和 Worker 都最多处理 400 条，且 RSS 响应大小仍限制为 1.5 MB；应在首次 Cron 日志中确认实际登记数量。
+首次运行会将当前 RSS 中最多 400 篇文章登记到 D1。`INITIAL_BACKFILL_COUNT` 指定其中排入回填队列的文章数；当前配置为 `400`，因此符合条件的历史文章会开始生成。实际正文少于 100 字的文章会跳过。注意 RSS 源和 Worker 都最多处理 400 条，且 RSS 响应大小仍限制为 1.5 MB；应在首次 Cron 日志中确认实际登记数量。
 
 每次 Cron 最多顺序合成 `MAX_EPISODES_PER_RUN` 篇（当前为 `5`）。约 300 篇按每轮 5 集、每天 6 轮计算，理想情况下约需 10 天；实际时间会受 TTS 响应、Cloudflare 执行限制和失败重试影响。若 Microsoft TTS 开始限流或 Worker 日志出现超时，应把该值调低。
 
@@ -104,16 +108,17 @@ npm run dev
 curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled"
 ```
 
-首次运行会按“首次启动行为”建立基线；默认不会合成历史文章。后续本地 Cron 会尝试生成待处理新文章，并需要本地 Worker 环境可以访问微软 TTS WebSocket。
+首次运行会按“首次启动行为”建立基线；本地 `wrangler.jsonc` 当前也会将最多 400 篇历史文章排队，并按每轮设置处理最多 5 集。短文会在正文检查后跳过。本地 Worker 需要能够访问博客，以及 MiMo 或微软 Edge TTS 服务。
 
 ## 常见排查
 
-- **没有新 episode**：检查 `https://134688.xyz/rss.xml` 是否可访问、Cloudflare Cron 是否已同步，以及 `#article-content` 是否仍存在。
+- **没有新 episode**：检查 `https://134688.xyz/rss.xml` 是否可访问、Cloudflare Cron 是否已同步，以及 `#article-content` 是否仍存在。实际正文不足 100 字的文章会有意跳过；RSS 摘要长度不用于判断。
 - **文章 URL 被拒绝**：检查 RSS 链接是否是 HTTPS、域名是否列在 `ALLOWED_SOURCE_HOSTS` 中，并确认重定向没有跳到其他域名。
 - **TTS 返回错误/403**：检查 Cloudflare Worker 日志、`EDGE_CHROMIUM_VERSION` 与匹配的 User-Agent 主版本、服务器时间及微软服务是否临时限流或更改协议。
 - **失败文章不再自动重试**：代码最多尝试 5 次。检查 `last_error` 后，按上面的 SQL 将该 episode 重置为 `pending`。
 - **RSS 音频无法播放**：确保访问的是 Worker 的 `/feed.xml`，并检查 `/audio/{slug}` 返回 MP3。R2 桶不需要公开。
-- **Cron 运行资源不足**：Scheduled Worker 的 CPU 与运行限额受 Cloudflare 账户计划影响。默认每轮只处理 1 集；若日志报 CPU/time limit，可进一步检查 Worker 当前计划和文章长度。
+- **详情页图片缺失**：优先取文章正文第一张 HTTPS 图片，其次用页面 `og:image`，最终回退 `/cover.svg`；检查源文章是否有图片和图片 URL 是否可直接访问。
+- **Cron 运行资源不足**：Scheduled Worker 的 CPU 与运行限额受 Cloudflare 账户计划影响。当前每轮最多处理 5 集；若日志报 CPU/time limit，可进一步检查 Worker 当前计划和文章长度。
 
 ## 参考
 

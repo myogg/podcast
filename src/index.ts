@@ -1,3 +1,4 @@
+import { fetchArticleContent } from "./article";
 import { buildPodcastFeed } from "./podcast-feed";
 import { pollAndProcess } from "./podcast";
 import type { EpisodeRow, Env } from "./types";
@@ -52,6 +53,40 @@ async function listEpisodes(env: Env): Promise<Array<{
     sourceUrl: episode.source_url,
     audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
   }));
+}
+
+async function loadEpisodeDetail(env: Env, slug: string): Promise<Response> {
+  const episode = await env.DB.prepare(
+    `SELECT slug, title, source_url, published_at, summary, status, audio_key,
+            audio_bytes, attempts, last_error, created_at, updated_at
+       FROM episodes
+      WHERE slug = ? AND status = 'published'`,
+  )
+    .bind(slug)
+    .first<EpisodeRow>();
+  if (!episode) return json({ error: "Episode not found" }, 404);
+
+  try {
+    const article = await fetchArticleContent(episode.source_url, env);
+    return json({
+      episode: {
+        slug: episode.slug,
+        title: episode.title,
+        publishedAt: episode.published_at,
+        summary: episode.summary,
+        sourceUrl: episode.source_url,
+        audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
+      },
+      article: {
+        text: article.text,
+        imageUrl: article.imageUrl,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Could not load episode article", slug, message);
+    return json({ error: "Could not load the original article right now" }, 502);
+  }
 }
 
 type ByteRange =
@@ -245,6 +280,18 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
     return json({ episodes: await listEpisodes(env) });
   }
 
+  const detailMatch = url.pathname.match(/^\/api\/episodes\/([^/]+)$/);
+  if (detailMatch && request.method === "GET") {
+    let slug: string;
+    try {
+      slug = decodeURIComponent(detailMatch[1]);
+    } catch {
+      return json({ error: "Episode not found" }, 404);
+    }
+    if (!/^[a-z0-9-]+$/.test(slug)) return json({ error: "Episode not found" }, 404);
+    return loadEpisodeDetail(env, slug);
+  }
+
   if (url.pathname === "/feed.xml" && request.method === "GET") {
     return new Response(await buildPodcastFeed(env, url.origin), {
       headers: {
@@ -257,6 +304,10 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
   if (url.pathname.startsWith("/audio/") && ["GET", "HEAD"].includes(request.method)) {
     const slug = url.pathname.slice("/audio/".length);
     return serveAudio(request, env, slug);
+  }
+
+  if (request.method === "GET" && /^\/episode\/[a-z0-9-]+\/?$/.test(url.pathname)) {
+    return env.ASSETS.fetch(new Request(new URL("/", url), request));
   }
 
   return env.ASSETS.fetch(request);

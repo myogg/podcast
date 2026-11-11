@@ -1,4 +1,4 @@
-import { fetchArticleText } from "./article";
+import { fetchArticleContent } from "./article";
 import { fetchSourceItems } from "./source-feed";
 import { characterLimit, synthesizeArticle } from "./tts";
 import type { EpisodeRow, Env, SourceItem } from "./types";
@@ -6,6 +6,7 @@ import type { EpisodeRow, Env, SourceItem } from "./types";
 const MAX_FEED_ITEMS = 400;
 const MAX_ATTEMPTS = 5;
 const CRON_LEASE_MS = 20 * 60 * 1000;
+const MIN_ARTICLE_CHARACTERS = 100;
 
 async function collectAudioBytes(
   stream: ReadableStream<Uint8Array>,
@@ -130,6 +131,22 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
   const audioKey = `episodes/${episode.slug}.mp3`;
 
   try {
+    const article = await fetchArticleContent(episode.source_url, env);
+    const body = article.text;
+    const bodyCharacters = Array.from(body.replace(/\s/g, "")).length;
+    if (bodyCharacters < MIN_ARTICLE_CHARACTERS) {
+      await env.AUDIO_BUCKET.delete(audioKey);
+      await env.DB.prepare(
+        `UPDATE episodes
+            SET status = 'baseline', last_error = NULL, updated_at = ?
+          WHERE slug = ? AND status = 'processing'`,
+      )
+        .bind(new Date().toISOString(), episode.slug)
+        .run();
+      console.info("episode skipped: article body is shorter than minimum", episode.slug, bodyCharacters);
+      return;
+    }
+
     // Recover an R2 success if a prior run died before updating D1.
     const existingObject = await env.AUDIO_BUCKET.head(audioKey);
     if (existingObject && existingObject.size > 0) {
@@ -143,7 +160,6 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
       return;
     }
 
-    const body = await fetchArticleText(episode.source_url, env);
     const spokenText = `${episode.title}。${body}`;
     if (spokenText.length > characterLimit(env)) {
       throw new Error(`Article is ${spokenText.length} characters; limit is ${characterLimit(env)}`);

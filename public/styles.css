@@ -125,3 +125,44 @@ h2 { margin: 0; font-size: 28px; line-height: 1.3; letter-spacing: -.04em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+
+/* Episode detail page: editorial reading layout inspired by the supplied reference. */
+.episode-title a { transition: color .2s ease; }
+.episode-title a:hover { color: var(--orange); }
+.detail-page { max-width: 1000px; margin: 0 auto; padding: 24px 0 84px; animation: rise-in .4s ease both; }
+.detail-topbar { display: flex; align-items: center; justify-content: space-between; min-height: 54px; border-bottom: 1px solid var(--line); }
+.detail-back { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; transition: color .2s ease; }
+.detail-back:hover, .detail-source:hover { color: var(--orange); }
+.detail-kicker, .detail-date, .detail-article-label { color: var(--muted); font: 10px/1.5 var(--mono); letter-spacing: .13em; }
+.detail-header { display: grid; grid-template-columns: minmax(220px, 330px) minmax(0, 1fr); align-items: center; gap: clamp(32px, 7vw, 84px); padding: 64px 0 46px; }
+.detail-cover-shell { width: min(100%, 320px); aspect-ratio: 1; justify-self: center; overflow: hidden; border: 1px solid rgb(23 34 30 / 12%); border-radius: 50%; background: var(--paper-deep); box-shadow: 0 22px 50px rgb(34 42 35 / 15%); }
+.detail-cover-shell.is-playing { animation: detail-cover-spin 58s linear infinite; }
+.detail-cover { display: block; width: 100%; height: 100%; object-fit: cover; }
+.detail-heading { min-width: 0; }
+.detail-heading .detail-date { margin: 0 0 12px; letter-spacing: .06em; }
+.detail-title { margin: 0; font-size: clamp(30px, 5vw, 52px); line-height: 1.25; letter-spacing: -.045em; overflow-wrap: anywhere; }
+.detail-summary { margin: 17px 0 23px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.detail-player { display: block; width: min(100%, 560px); height: 42px; accent-color: var(--orange); }
+.detail-source { display: inline-block; margin: 0 0 35px; padding-bottom: 4px; border-bottom: 1px solid var(--orange); color: var(--muted); font-size: 12px; transition: color .2s ease; }
+.detail-article { padding-top: 28px; border-top: 1px solid var(--ink); }
+.detail-article-label { margin: 0 0 28px; }
+.detail-article-body { max-width: 760px; margin: 0 auto; color: #333b35; font-size: 16px; line-height: 2.05; overflow-wrap: anywhere; }
+.detail-paragraph { margin: 0 0 1.35em; white-space: pre-wrap; }
+.detail-loading, .detail-error { max-width: 760px; min-height: 48vh; margin: 0 auto; padding: 70px 0; color: var(--muted); }
+.detail-error h1 { margin: 36px 0 10px; font-size: clamp(28px, 5vw, 46px); }
+.detail-error p { line-height: 1.8; }
+@keyframes detail-cover-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 760px) {
+  .detail-page { padding: 10px 0 60px; }
+  .detail-header { grid-template-columns: 1fr; gap: 28px; padding: 38px 0 32px; }
+  .detail-cover-shell { width: min(68vw, 260px); }
+  .detail-heading { text-align: center; }
+  .detail-heading .detail-date { margin-bottom: 10px; }
+  .detail-title { font-size: clamp(27px, 8vw, 38px); }
+  .detail-summary { margin: 13px auto 18px; font-size: 13px; }
+  .detail-player { margin: 0 auto; }
+  .detail-source { margin-bottom: 28px; }
+  .detail-article-body { font-size: 15px; line-height: 1.95; }
+}

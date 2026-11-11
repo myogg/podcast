@@ -34,15 +34,16 @@ export async function buildPodcastFeed(
   const items = result.results
     .map((episode) => {
       const audioUrl = `${siteBase}/audio/${encodeURIComponent(episode.slug)}`;
+      const episodeUrl = `${siteBase}/episode/${encodeURIComponent(episode.slug)}`;
       const publishedDate = new Date(episode.published_at).toUTCString();
       const itemSummary = episode.summary || `原文朗读：${episode.title}`;
       return `
     <item>
       <title>${escapeXml(episode.title)}</title>
-      <link>${escapeXml(episode.source_url)}</link>
+      <link>${escapeXml(episodeUrl)}</link>
       <guid isPermaLink="false">${escapeXml(episode.slug)}</guid>
       <pubDate>${publishedDate}</pubDate>
-      <description>${cdata(itemSummary)}</description>
+      <description>${cdata(`${itemSummary}\n原文：${episode.source_url}`)}</description>
       <enclosure url="${escapeXml(audioUrl)}" length="${episode.audio_bytes || 0}" type="audio/mpeg" />
       <itunes:summary>${cdata(itemSummary)}</itunes:summary>
       <itunes:episodeType>full</itunes:episodeType>
