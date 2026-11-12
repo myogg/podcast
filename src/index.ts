@@ -1,7 +1,33 @@
-import { fetchArticleContent } from "./article";
 import { buildPodcastFeed } from "./podcast-feed";
 import { pollAndProcess } from "./podcast";
 import type { EpisodeRow, Env } from "./types";
+
+// 摘要只取 D1 的 description；老行为空时用标题兜底，绝不抓正文截取。
+function resolveDescription(
+  episode: Pick<EpisodeRow, "description" | "title">,
+): string {
+  return episode.description?.trim() || episode.title;
+}
+
+// 先按 slug 查，查不到再按 legacy_slug 查（0004 迁移后老 hash 保存在这里）。
+async function findPublishedEpisode<T>(
+  env: Env,
+  slug: string,
+  columns: string,
+): Promise<T | null> {
+  const bySlug = await env.DB.prepare(
+    `SELECT ${columns} FROM episodes WHERE slug = ? AND status = 'published'`,
+  )
+    .bind(slug)
+    .first<T>();
+  if (bySlug) return bySlug;
+
+  return env.DB.prepare(
+    `SELECT ${columns} FROM episodes WHERE legacy_slug = ? AND status = 'published'`,
+  )
+    .bind(slug)
+    .first<T>();
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -33,60 +59,48 @@ async function listEpisodes(env: Env): Promise<Array<{
   slug: string;
   title: string;
   publishedAt: string;
-  summary: string;
+  description: string;
   sourceUrl: string;
   audioUrl: string;
 }>> {
   const result = await env.DB.prepare(
-    `SELECT slug, title, source_url, published_at, summary
+    `SELECT slug, title, source_url, published_at, description
        FROM episodes
       WHERE status = 'published'
       ORDER BY published_at DESC
       LIMIT 100`,
-  ).all<Pick<EpisodeRow, "slug" | "title" | "source_url" | "published_at" | "summary">>();
+  ).all<Pick<EpisodeRow, "slug" | "title" | "source_url" | "published_at" | "description">>();
 
   return result.results.map((episode) => ({
     slug: episode.slug,
     title: episode.title,
     publishedAt: episode.published_at,
-    summary: episode.summary,
+    description: resolveDescription(episode),
     sourceUrl: episode.source_url,
     audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
   }));
 }
 
+// 详情页只读 D1 元数据，不再抓取博客文章页，也不再返回文章全文。
 async function loadEpisodeDetail(env: Env, slug: string): Promise<Response> {
-  const episode = await env.DB.prepare(
-    `SELECT slug, title, source_url, published_at, summary, status, audio_key,
-            audio_bytes, attempts, last_error, created_at, updated_at
-       FROM episodes
-      WHERE slug = ? AND status = 'published'`,
-  )
-    .bind(slug)
-    .first<EpisodeRow>();
+  const episode = await findPublishedEpisode<
+    Pick<EpisodeRow,
+      "slug" | "title" | "description" | "source_url" | "published_at" | "duration_seconds">
+  >(env, slug, "slug, title, description, source_url, published_at, duration_seconds");
   if (!episode) return json({ error: "Episode not found" }, 404);
 
-  try {
-    const article = await fetchArticleContent(episode.source_url, env);
-    return json({
-      episode: {
-        slug: episode.slug,
-        title: episode.title,
-        publishedAt: episode.published_at,
-        summary: episode.summary,
-        sourceUrl: episode.source_url,
-        audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
-      },
-      article: {
-        text: article.text,
-        imageUrl: article.imageUrl,
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("Could not load episode article", slug, message);
-    return json({ error: "Could not load the original article right now" }, 502);
-  }
+  return json({
+    episode: {
+      slug: episode.slug,
+      title: episode.title,
+      publishedAt: episode.published_at,
+      description: resolveDescription(episode),
+      durationSeconds: episode.duration_seconds,
+      sourceUrl: episode.source_url,
+      audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
+      notice: "完整文章请到博客阅读，播客这里只显示摘要。",
+    },
+  });
 }
 
 type ByteRange =
@@ -132,11 +146,11 @@ async function serveAudio(request: Request, env: Env, slug: string): Promise<Res
     return new Response("Not found", { status: 404 });
   }
 
-  const episode = await env.DB.prepare(
-    "SELECT audio_key FROM episodes WHERE slug = ? AND status = 'published'",
-  )
-    .bind(decodedSlug)
-    .first<{ audio_key: string | null }>();
+  const episode = await findPublishedEpisode<{ audio_key: string | null }>(
+    env,
+    decodedSlug,
+    "audio_key",
+  );
   if (!episode?.audio_key) return new Response("Not found", { status: 404 });
   const audioKey = episode.audio_key;
 
@@ -303,7 +317,7 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
     } catch {
       return json({ error: "Episode not found" }, 404);
     }
-    if (!/^[a-z0-9-]+$/.test(slug)) return json({ error: "Episode not found" }, 404);
+    if (!/^[\p{L}\p{N}_-]+$/u.test(slug)) return json({ error: "Episode not found" }, 404);
     return loadEpisodeDetail(env, slug);
   }
 
@@ -321,7 +335,7 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
     return serveAudio(request, env, slug);
   }
 
-  if (request.method === "GET" && /^\/episode\/[a-z0-9-]+\/?$/.test(url.pathname)) {
+  if (request.method === "GET" && /^\/episode\/[^/]+\/?$/.test(url.pathname)) {
     return env.ASSETS.fetch(new Request(new URL("/", url), request));
   }
 

@@ -1,3 +1,4 @@
+import { extractPostSlug } from "./article";
 import type { EpisodeRow, Env } from "./types";
 
 function escapeXml(value: string): string {
@@ -9,11 +10,7 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function cdata(value: string): string {
-  return `<![CDATA[${value.replace(/]]>/g, "]]]]><![CDATA[>") }]]>`;
-}
-
-// 统一输出 HH:MM:SS，避免 MM:SS 被部分客户端误读成 HH:MM。
+// 统一输出 HH:MM:SS，避免 MM:SS 被部分客户端误读。
 function formatItunesDuration(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
   const hours = Math.floor(total / 3600);
@@ -57,7 +54,7 @@ export async function buildPodcastFeed(
   origin: string,
 ): Promise<string> {
   const result = await env.DB.prepare(
-    `SELECT slug, title, source_url, published_at, summary, status, audio_key,
+    `SELECT slug, title, source_url, published_at, description, status, audio_key,
             audio_bytes, audio_size, duration_seconds, tts_provider,
             attempts, last_error, created_at, updated_at
        FROM episodes
@@ -80,10 +77,15 @@ export async function buildPodcastFeed(
 
   const items = sized
     .map(({ episode, audioSize }) => {
+      // guid / link 一律用新 slug；音频 URL 用 D1 里实际存的主键，
+      // 这样老集在 0004 迁移前也能继续播放，不断订阅。
+      const displaySlug = extractPostSlug(episode.source_url) || episode.slug;
       const audioUrl = `${siteBase}/audio/${encodeURIComponent(episode.slug)}`;
-      const episodeUrl = `${siteBase}/episode/${encodeURIComponent(episode.slug)}`;
+      const episodeUrl = `${siteBase}/episode/${encodeURIComponent(displaySlug)}`;
       const publishedDate = new Date(episode.published_at).toUTCString();
-      const itemSummary = episode.summary || `原文朗读：${episode.title}`;
+      // description 只放 D1 摘要（老行为空时用标题兜底），并做 HTML 转义，
+      // 不放全文，也不用 CDATA，避免摘要里的标记破坏 XML。
+      const itemDescription = escapeXml(episode.description?.trim() || episode.title);
       const durationTag = `\n      <itunes:duration>${formatItunesDuration(
         resolveDurationSeconds(episode, audioSize),
       )}</itunes:duration>`;
@@ -91,11 +93,11 @@ export async function buildPodcastFeed(
     <item>
       <title>${escapeXml(episode.title)}</title>
       <link>${escapeXml(episodeUrl)}</link>
-      <guid isPermaLink="false">${escapeXml(episode.slug)}</guid>
+      <guid isPermaLink="false">${escapeXml(episodeUrl)}</guid>
       <pubDate>${publishedDate}</pubDate>
-      <description>${cdata(`${itemSummary}\n原文：${episode.source_url}`)}</description>
+      <description>${itemDescription}</description>
       <enclosure url="${escapeXml(audioUrl)}" length="${audioSize}" type="audio/mpeg" />${durationTag}
-      <itunes:summary>${cdata(itemSummary)}</itunes:summary>
+      <itunes:summary>${itemDescription}</itunes:summary>
       <itunes:episodeType>full</itunes:episodeType>
       <itunes:explicit>false</itunes:explicit>
     </item>`;

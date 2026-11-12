@@ -1,6 +1,31 @@
 import { fetchSourceResponse, validateSourceUrl } from "./source-url";
 import type { Env } from "./types";
 
+// 博客文章 URL 形如 https://<任意域名>/post/<slug>，slug 就是稳定的节目 ID。
+// 协议与域名不参与解析；只接受字母、数字、中文、-、_，其余一律拒绝。
+const POST_PATH_PATTERN = /^\/post\/([^/]+)\/?$/;
+const POST_SLUG_PATTERN = /^[\p{L}\p{N}_-]+$/u;
+
+export function extractPostSlug(articleUrl: string): string | null {
+  let pathname: string;
+  try {
+    pathname = new URL(articleUrl).pathname;
+  } catch {
+    return null;
+  }
+  const match = POST_PATH_PATTERN.exec(pathname);
+  if (!match) return null;
+
+  let slug: string;
+  try {
+    slug = decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+  if (!slug || !POST_SLUG_PATTERN.test(slug)) return null;
+  return slug;
+}
+
 // 正文容器按优先级回退：主题改版后即使 #article-content 消失，
 // 仍能从语义标签 article / main 取到正文。
 const CONTENT_SELECTORS = ["#article-content", "article", "main"] as const;

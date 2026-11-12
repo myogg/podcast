@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { extractPostSlug } from "./article";
 import { fetchSourceResponse, validateSourceUrl } from "./source-url";
 import type { Env, SourceItem } from "./types";
 
@@ -65,25 +66,6 @@ async function readLimitedText(response: Response, maxBytes: number): Promise<st
   return new TextDecoder().decode(bytes);
 }
 
-function hex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function slugFromLink(url: URL): Promise<string> {
-  const lastPart = url.pathname.split("/").filter(Boolean).at(-1) || "episode";
-  const readable = decodeURIComponent(lastPart)
-    .replace(/\.[a-z0-9]{1,8}$/i, "")
-    .normalize("NFKD")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  const digest = new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(url.toString())),
-  );
-  return `${readable || "episode"}-${hex(digest.slice(0, 8))}`;
-}
-
 export async function fetchSourceItems(env: Env, feedUrl: string): Promise<SourceItem[]> {
   const safeFeedUrl = validateSourceUrl(feedUrl, env);
   const response = await fetchSourceResponse(safeFeedUrl, env, {
@@ -116,17 +98,26 @@ export async function fetchSourceItems(env: Env, feedUrl: string): Promise<Sourc
       if (!rawLink || !title) continue;
 
       const link = validateSourceUrl(new URL(rawLink, safeFeedUrl).toString(), env);
+      // 节目 ID 就是博客的 post.slug。解析不出来就整篇跳过，
+      // 绝不退回 hash(URL)，避免库里混进两种 ID。
+      const slug = extractPostSlug(link);
+      if (!slug) {
+        console.warn("Skipping RSS item without a valid /post/ slug", link);
+        continue;
+      }
       const publishedDate = new Date(asText(item.pubDate));
       const publishedAt = Number.isNaN(publishedDate.getTime())
         ? new Date().toISOString()
         : publishedDate.toISOString();
 
+      // description 只取 RSS 里的值；RSS 没给摘要时用标题兜底，不去文章页截取。
+      const rssDescription = stripMarkup(asText(item.description)).slice(0, 2_000);
       result.push({
-        slug: await slugFromLink(new URL(link)),
+        slug,
         title,
         link,
         publishedAt,
-        summary: stripMarkup(asText(item.description)).slice(0, 2_000),
+        description: rssDescription || title,
       });
     } catch (error) {
       console.warn("Skipping invalid RSS item", error instanceof Error ? error.message : String(error));
