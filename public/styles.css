@@ -143,6 +143,7 @@ h2 { margin: 0; font-size: 28px; line-height: 1.3; letter-spacing: -.04em; }
 .detail-heading .detail-date { margin: 0 0 12px; letter-spacing: .06em; }
 .detail-title { margin: 0; font-size: clamp(30px, 5vw, 52px); line-height: 1.25; letter-spacing: -.045em; overflow-wrap: anywhere; }
 .detail-summary { margin: 17px 0 23px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.detail-note { margin: -12px 0 23px; color: var(--muted); font-size: 12px; line-height: 1.8; }
 .detail-player { display: block; width: min(100%, 560px); height: 42px; accent-color: var(--orange); }
 .detail-source { display: inline-block; margin: 0 0 35px; padding-bottom: 4px; border-bottom: 1px solid var(--orange); color: var(--muted); font-size: 12px; transition: color .2s ease; }
 .detail-article { padding-top: 28px; border-top: 1px solid var(--ink); }

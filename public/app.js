@@ -4,6 +4,7 @@ const error = document.querySelector("#error-state");
 const count = document.querySelector("#episode-count");
 const main = document.querySelector("main");
 const fallbackCover = "/cover.svg";
+const detailNotice = "完整文章请到博客阅读，播客这里只显示摘要。";
 
 document.addEventListener("play", (event) => {
   const activePlayer = event.target;
@@ -42,7 +43,7 @@ function createEpisode(episode, index) {
   const titleLink = element("a", "", episode.title);
   titleLink.href = `/episode/${encodeURIComponent(episode.slug)}`;
   title.append(titleLink);
-  const summary = element("p", "episode-summary", episode.summary || "文章原文朗读");
+  const summary = element("p", "episode-summary", episode.description || episode.title);
   const player = document.createElement("audio");
   player.className = "episode-player";
   player.controls = true;
@@ -103,15 +104,9 @@ function renderDetailError(message) {
   main.append(section);
 }
 
-function renderArticleText(container, text) {
-  const blocks = text.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
-  for (const block of blocks) {
-    container.append(element("p", "detail-paragraph", block));
-  }
-}
-
+// 详情页只显示 D1 里的摘要与音频，不加载文章全文，也不请求博客文章页。
 async function loadEpisodeDetail(slug) {
-  main.replaceChildren(element("p", "detail-loading", "正在打开文章与节目…"));
+  main.replaceChildren(element("p", "detail-loading", "正在打开节目…"));
   try {
     const response = await fetch(`/api/episodes/${encodeURIComponent(slug)}`, {
       headers: { Accept: "application/json" },
@@ -120,42 +115,36 @@ async function loadEpisodeDetail(slug) {
     if (!response.ok) throw new Error(payload.error || "这集节目不存在或暂不可用。");
 
     const episode = payload.episode;
-    const article = payload.article;
-    if (!episode || !article || !article.text) throw new Error("文章内容暂时无法读取，请稍后再试。");
+    if (!episode) throw new Error("节目信息暂时无法读取，请稍后再试。");
+    const description = episode.description || episode.title;
 
     document.title = `${episode.title}｜姜一一的播客`;
-    const description = document.querySelector('meta[name="description"]');
-    if (description) description.content = episode.summary || episode.title;
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) metaDescription.content = description;
 
     const page = element("div", "detail-page");
     const topbar = element("div", "detail-topbar");
     const back = element("a", "detail-back", "← 返回节目列表");
     back.href = "/";
-    const label = element("span", "detail-kicker", "ARTICLE · AUDIO");
+    const label = element("span", "detail-kicker", "EPISODE · AUDIO");
     topbar.append(back, label);
 
     const header = element("section", "detail-header");
     const coverShell = element("div", "detail-cover-shell");
     const cover = document.createElement("img");
     cover.className = "detail-cover";
-    cover.src = article.imageUrl || fallbackCover;
-    cover.alt = article.imageUrl ? `${episode.title}文章配图` : "博客播客默认封面";
+    cover.src = fallbackCover;
+    cover.alt = "博客播客默认封面";
     cover.loading = "eager";
     cover.decoding = "async";
-    cover.referrerPolicy = "no-referrer";
-    cover.onerror = () => {
-      if (cover.src !== new URL(fallbackCover, location.href).href) {
-        cover.src = fallbackCover;
-        cover.alt = "博客播客默认封面";
-      }
-    };
     coverShell.append(cover);
 
     const heading = element("div", "detail-heading");
     heading.append(
       element("p", "detail-date", formatDate(episode.publishedAt)),
       element("h1", "detail-title", episode.title),
-      element("p", "detail-summary", episode.summary || "博客文章原文朗读"),
+      element("p", "detail-summary", description),
+      element("p", "detail-note", episode.notice || detailNotice),
     );
     const audio = document.createElement("audio");
     audio.className = "detail-player";
@@ -174,13 +163,7 @@ async function loadEpisodeDetail(slug) {
     source.target = "_blank";
     source.rel = "noopener noreferrer";
 
-    const articleSection = element("article", "detail-article");
-    articleSection.append(element("p", "detail-article-label", "原文 · FULL TEXT"));
-    const articleBody = element("div", "detail-article-body");
-    renderArticleText(articleBody, article.text);
-    articleSection.append(articleBody);
-
-    page.append(topbar, header, source, articleSection);
+    page.append(topbar, header, source);
     main.replaceChildren(page);
   } catch (cause) {
     console.error("Could not load episode detail", cause);
@@ -188,9 +171,15 @@ async function loadEpisodeDetail(slug) {
   }
 }
 
-const detailMatch = location.pathname.match(/^\/episode\/([a-z0-9-]+)\/?$/);
+const detailMatch = location.pathname.match(/^\/episode\/([^/]+)\/?$/);
 if (detailMatch) {
-  loadEpisodeDetail(detailMatch[1]);
+  let slug = detailMatch[1];
+  try {
+    slug = decodeURIComponent(slug);
+  } catch {
+    // 保留原始路径段，交由 API 返回 404。
+  }
+  loadEpisodeDetail(slug);
 } else if (list && empty && error && count) {
   loadEpisodes();
 }

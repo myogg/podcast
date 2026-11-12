@@ -1,4 +1,4 @@
-import { fetchArticleContent } from "./article";
+import { extractPostSlug, fetchArticleContent } from "./article";
 import { fetchSourceItems } from "./source-feed";
 import { characterLimit, measureMp3DurationSeconds, synthesizeArticle } from "./tts";
 import type { EpisodeRow, Env, SourceItem } from "./types";
@@ -101,10 +101,10 @@ async function insertBaseline(
     const status = index < backfillCount ? "pending" : "baseline";
     const result = await env.DB.prepare(
       `INSERT OR IGNORE INTO episodes
-        (slug, title, source_url, published_at, summary, status, created_at, updated_at)
+        (slug, title, source_url, published_at, description, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(item.slug, item.title, item.link, item.publishedAt, item.summary, status, now, now)
+      .bind(item.slug, item.title, item.link, item.publishedAt, item.description, status, now, now)
       .run();
     inserted += result.meta.changes || 0;
   }
@@ -124,14 +124,56 @@ async function queueNewItems(env: Env, items: SourceItem[]): Promise<number> {
   for (const item of items.slice(0, MAX_FEED_ITEMS)) {
     const result = await env.DB.prepare(
       `INSERT OR IGNORE INTO episodes
-        (slug, title, source_url, published_at, summary, status, created_at, updated_at)
+        (slug, title, source_url, published_at, description, status, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
     )
-      .bind(item.slug, item.title, item.link, item.publishedAt, item.summary, now, now)
+      .bind(item.slug, item.title, item.link, item.publishedAt, item.description, now, now)
       .run();
     inserted += result.meta.changes || 0;
   }
   return inserted;
+}
+
+// 0004 老数据迁移：老行的 slug 是 hash(URL)。把旧 ID 原样存到 legacy_slug，
+// slug 换成 /post/<slug> 里的 post.slug。用 JS 解析，百分号编码的中文 slug 也能处理。
+// 幂等：只处理 legacy_slug IS NULL 的行；迁移后旧的 /audio/<hash> 由 legacy_slug 兜底。
+async function migrateLegacySlugs(env: Env): Promise<void> {
+  const rows = await env.DB.prepare(
+    "SELECT slug, source_url FROM episodes WHERE legacy_slug IS NULL LIMIT 500",
+  ).all<{ slug: string; source_url: string }>();
+  const now = new Date().toISOString();
+
+  for (const row of rows.results) {
+    const newSlug = extractPostSlug(row.source_url);
+    // 已经是新 ID，或链接无法解析：标记已处理，避免每轮重复扫描。
+    if (!newSlug || newSlug === row.slug) {
+      await env.DB.prepare(
+        "UPDATE episodes SET legacy_slug = '' WHERE slug = ? AND legacy_slug IS NULL",
+      )
+        .bind(row.slug)
+        .run();
+      continue;
+    }
+
+    const result = await env.DB.prepare(
+      `UPDATE episodes
+          SET legacy_slug = ?, slug = ?, updated_at = ?
+        WHERE slug = ? AND legacy_slug IS NULL
+          AND NOT EXISTS (SELECT 1 FROM episodes WHERE slug = ?)`,
+    )
+      .bind(row.slug, newSlug, now, row.slug, newSlug)
+      .run();
+
+    if (result.meta.changes !== 1) {
+      // 新 ID 的行已存在：老行只保留别名，供 /audio/<旧hash> 继续访问。
+      await env.DB.prepare(
+        `UPDATE episodes SET legacy_slug = ?, updated_at = ?
+          WHERE slug = ? AND legacy_slug IS NULL`,
+      )
+        .bind(row.slug, now, row.slug)
+        .run();
+    }
+  }
 }
 
 async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
@@ -256,6 +298,13 @@ export async function pollAndProcess(env: Env): Promise<void> {
       .bind(MAX_ATTEMPTS, MAX_ATTEMPTS, now, staleBefore)
       .run();
 
+    // 先迁移老 ID，再登记新文章，避免 source_url 的 UNIQUE 约束挡住新 slug。
+    try {
+      await migrateLegacySlugs(env);
+    } catch (error) {
+      console.error("legacy slug migration failed", error);
+    }
+
     const sourceUrl = env.SOURCE_RSS_URL || "https://134688.xyz/rss.xml";
     const items = await fetchSourceItems(env, sourceUrl);
     if (!items.length) {
@@ -280,8 +329,8 @@ export async function pollAndProcess(env: Env): Promise<void> {
 
     const maxEpisodes = integerSetting(env.MAX_EPISODES_PER_RUN, 1, 1, 10);
     const pending = await env.DB.prepare(
-      `SELECT slug, title, source_url, published_at, summary, status, audio_key,
-              audio_bytes, attempts, last_error, created_at, updated_at
+      `SELECT slug, title, source_url, published_at, description, legacy_slug,
+              status, audio_key, audio_bytes, attempts, last_error, created_at, updated_at
          FROM episodes
         WHERE status = 'pending' AND attempts < ?
         ORDER BY published_at ASC

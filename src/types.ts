@@ -23,7 +23,7 @@ export interface SourceItem {
   title: string;
   link: string;
   publishedAt: string;
-  summary: string;
+  description: string;
 }
 
 export interface EpisodeRow {
@@ -31,7 +31,8 @@ export interface EpisodeRow {
   title: string;
   source_url: string;
   published_at: string;
-  summary: string;
+  description: string | null;
+  legacy_slug: string | null;
   status: "baseline" | "pending" | "processing" | "published" | "failed";
   audio_key: string | null;
   audio_bytes: number | null;
