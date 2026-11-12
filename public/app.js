@@ -3,7 +3,7 @@ const empty = document.querySelector("#empty-state");
 const error = document.querySelector("#error-state");
 const count = document.querySelector("#episode-count");
 const main = document.querySelector("main");
-const fallbackCover = "/cover.svg";
+const fallbackCover = "/cover.jpg";
 const detailNotice = "完整文章请到博客阅读，播客这里只显示摘要。";
 
 document.addEventListener("play", (event) => {

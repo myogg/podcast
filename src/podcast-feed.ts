@@ -113,13 +113,13 @@ export async function buildPodcastFeed(
     <language>zh-cn</language>
     <lastBuildDate>${new Date(updatedAt).toUTCString()}</lastBuildDate>
     <image>
-      <url>${escapeXml(`${siteBase}/cover.svg`)}</url>
+      <url>${escapeXml(`${siteBase}/cover.jpg`)}</url>
       <title>${escapeXml(title)}</title>
       <link>${escapeXml(siteBase)}</link>
     </image>
     <itunes:author>姜一一</itunes:author>
     <itunes:owner><itunes:name>姜一一</itunes:name></itunes:owner>
-    <itunes:image href="${escapeXml(`${siteBase}/cover.svg`)}" />
+    <itunes:image href="${escapeXml(`${siteBase}/cover.jpg`)}" />
     <itunes:category text="Technology" />
     <itunes:explicit>false</itunes:explicit>
     ${items}
