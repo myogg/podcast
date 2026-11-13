@@ -37,6 +37,8 @@ Worker 从 Astro RSS 读取标题、链接、发布时间和摘要。RSS 只输�
 
 网站展示只用 RSS 摘要：登记时把 RSS 的 `description` 写入 D1 的 `description`（`migrations/0005_episode_description.sql`），RSS 没给摘要时用标题兜底。列表页 `/api/episodes`、`/feed.xml` 和 `/episode/{slug}` 详情页都只读这一列；详情页只显示标题、发布时间、摘要、音频播放器、原文链接与提示文案，不会请求博客文章页，也不解析正文容器。feed 的 `<description>` 会做 HTML 转义。
 
+网站列表页分页展示：`GET /api/episodes?page=N&limit=M`，默认每页 12 集、`limit` 上限 100，非法参数回退默认值，越界 `page` 收敛到最后一页。响应体除 `episodes` 外还带 `pagination`（`page` / `pageSize` / `total` / `totalPages` / `hasPrev` / `hasNext`）；前端用 `?page=N` 同步网址、支持浏览器前进后退，节目序号按全站连续编号。`published_at` 相同时以 `slug` 作次级排序键，保证翻页不重复、不漏集。`/feed.xml` **不分页**：播客客户端需一次拿到完整目录，因此只设一个很大的上限（`FEED_MAX_ITEMS`）防止异常数据，不再按 100 集截断，历史集不会从订阅里消失。
+
 语音合成时会从标题和正文中移除带 `http://`、`https://`、`ftp://`、`www.` 的网址，以及常见域名后缀的网址；此过滤只作用于播报输入。网站列表页或详情页任一播放器开始播放时，其他节目播放器会自动暂停。
 
 Worker 在确认实际文章正文后执行 100 字过滤：去掉空白后不足 100 个 Unicode 字符的文章会标记为内部 `baseline` 状态，不生成 TTS 音频、不出现在节目列表或播客 RSS 中，也不会在下一轮重复尝试。RSS 的 `description` 是摘要而非全文，因此过滤基于文章正文，不基于摘要；判断前需要读取一次文章页面。

@@ -49,6 +49,10 @@ function resolveDurationSeconds(episode: EpisodeRow, audioSize: number): number 
   return 1;
 }
 
+// 播客 RSS 不分页：订阅客户端靠一次拉取建立完整目录，分页会丢掉历史集。
+// 用一个足够大的上限防止意外数据把响应撑爆，而不是按页截断。
+const FEED_MAX_ITEMS = 1000;
+
 export async function buildPodcastFeed(
   env: Env,
   origin: string,
@@ -60,7 +64,7 @@ export async function buildPodcastFeed(
        FROM episodes
       WHERE status = 'published'
       ORDER BY published_at DESC
-      LIMIT 100`,
+      LIMIT ${FEED_MAX_ITEMS}`,
   ).all<EpisodeRow>();
 
   const siteBase = (env.PUBLIC_BASE_URL || origin).replace(/\/+$/, "");
