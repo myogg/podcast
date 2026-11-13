@@ -241,7 +241,7 @@ small{color:#666}
 <p>输入你在 Cloudflare 中设置的 MANUAL_TRIGGER_SECRET。密钥只在本次页面内存中使用，不会写入网址。</p>
 <form id="run">
 <input id="secret" type="password" autocomplete="off" placeholder="手动触发密钥" required>
-<button id="submit" type="submit">立即处理最多 2 篇</button>
+<button id="submit" type="submit">立即处理最多 10 篇</button>
 </form>
 <small>处理期间请不要关闭页面。完成后到 D1 查询 episodes 状态。</small>
 <pre id="result">等待操作</pre>
@@ -286,7 +286,7 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
       return json({
         ok: true,
         message: "Processing run finished. Check D1 episodes for results.",
-        maxEpisodesPerRun: Number(env.MAX_EPISODES_PER_RUN) || 2,
+        maxEpisodesPerRun: Number(env.MAX_EPISODES_PER_RUN) || 10,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

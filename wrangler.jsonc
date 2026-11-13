@@ -10,7 +10,7 @@
     "run_worker_first": ["/api/*", "/feed.xml", "/audio/*", "/episode/*"]
   },
   "triggers": {
-    "crons": ["0 */4 * * *"]
+    "crons": ["0 * * * *"]
   },
   "r2_buckets": [
     {
@@ -35,7 +35,7 @@
     "MIMO_TTS_VOICE": "白桦",
     "TTS_RATE": "default",
     "EDGE_CHROMIUM_VERSION": "143.0.3650.75",
-    "MAX_EPISODES_PER_RUN": "2",
-    "INITIAL_BACKFILL_COUNT": "20"
+    "MAX_EPISODES_PER_RUN": "10",
+    "INITIAL_BACKFILL_COUNT": "400"
   }
 }
