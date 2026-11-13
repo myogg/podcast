@@ -1,13 +1,13 @@
 # 姜一一的播客
 
-一个独立的 Cloudflare Worker 项目：每 4 小时检查 `https://134688.xyz/rss.xml`。发现新文章后抓取文章页正文，过滤网址后使用语音合成逐段朗读，合成 MP3 保存到 R2，并在网站与 `/feed.xml` 中发布新的一集。网站包含节目列表和 `/episode/{slug}` 详情页；详情页只显示 RSS 摘要，不展示文章全文；同一时间只播放一集，不使用 AI 改写文章。
+一个独立的 Cloudflare Worker 项目：每小时检查 `https://134688.xyz/rss.xml`。发现新文章后抓取文章页正文，过滤网址后使用语音合成逐段朗读，合成 MP3 保存到 R2，并在网站与 `/feed.xml` 中发布新的一集。网站包含节目列表和 `/episode/{slug}` 详情页；详情页只显示 RSS 摘要，不展示文章全文；同一时间只播放一集，不使用 AI 改写文章。
 
 ## 组成
 
 - **Cloudflare Worker**：提供播客网站、JSON API、RSS feed、音频读取路由和定时任务。
 - **R2**：私有保存最终 MP3。项目不开放 R2 的匿名写入，也不需要把 R2 Access Key 放进代码。
 - **D1**：保存文章去重、生成状态、重试次数、音频元信息和 Cron 租约。
-- **Cron Trigger**：`0 */4 * * *`，每 4 小时检查一次。Cloudflare Cron 按 UTC 运行；换算成北京时间是每天 08:00、12:00、16:00、20:00、次日 00:00 和 04:00。首次运行会把 RSS 中最多 400 篇文章登记到 D1，其中最多 20 篇排入历史回填队列；默认每轮顺序处理 2 集，后续队列留给下一轮 Cron。
+- **Cron Trigger**：当前为**快速回填模式**，`0 * * * *`，每小时整点检查一次（Cloudflare Cron 按 UTC 运行，即北京时间每小时整点）。首次运行会把 RSS 中最多 400 篇文章全部登记并排入历史回填队列；对已经 bootstrap 过的旧库，每轮会把此前因超出配额而搁置的 `baseline` 历史文章自动补进队列。每轮顺序处理 10 集，相邻两集之间间隔 2 秒以避免 TTS 限流，单集失败即记为 `failed` 并继续下一篇。回填完成后应把 Cron 改回 `0 */4 * * *`（每 4 小时一次）。
 - **TTS**：配置 `MIMO_API_KEY` 时优先使用 MiMo TTS，默认预置音色为中文男声 `白桦`；未配置或 MiMo 请求失败时回退到 Worker 内直接实现的 Edge TTS WebSocket 客户端，默认普通话女声 `zh-CN-XiaoxiaoNeural`。不依赖旧版 `@echristian/edge-tts` npm 包或其他转发服务。更改默认音色只影响之后新合成的节目，不会自动重做 R2 中已经生成的音频。
 
 R2 桶默认保持私有。网站通过 Worker 的 `/audio/{slug}` 路由读取音频；没有任何公开上传接口。该路由支持 HTTP Range 请求（返回 206 与 Content-Range），播放器可拖动进度条，响应带 `public, max-age=31536000, immutable` 缓存头。RSS item 的音频 enclosure 使用播客网站自身的 URL，length 取 R2 对象的真实字节数，并附带 `itunes:duration`。
@@ -45,11 +45,11 @@ Worker 在确认实际文章正文后执行 100 字过滤：去掉空白后不�
 
 ## 首次启动行为
 
-首次运行会将当前 RSS 中最多 400 篇文章登记到 D1。`INITIAL_BACKFILL_COUNT` 指定其中排入回填队列的文章数；当前配置为 `20`，因此只有最近 20 篇符合条件的历史文章会开始生成，其余登记为 `baseline`。实际正文少于 100 字的文章会跳过。注意 RSS 源和 Worker 都最多处理 400 条，且 RSS 响应大小仍限制为 1.5 MB；应在首次 Cron 日志中确认实际登记数量。
+首次运行会将当前 RSS 中最多 400 篇文章登记到 D1。`INITIAL_BACKFILL_COUNT` 指定其中排入回填队列的文章数；当前配置为 `400`，因此所有登记的历史文章都会进入队列。对已经 bootstrap 过的旧库（早先 `INITIAL_BACKFILL_COUNT` 较小），每轮 `pollAndProcess` 会调用 `requeueDeferredBaseline`，把 `status='baseline'` 且从未尝试合成（`attempts=0`、无音频）的文章幂等地补进队列；正文不足 100 字被判 `baseline` 的短文不会被误捞。实际正文少于 100 字的文章会跳过。注意 RSS 源和 Worker 都最多处理 400 条，且 RSS 响应大小仍限制为 1.5 MB；应在首次 Cron 日志中确认实际登记数量。
 
-每次 Cron 最多顺序合成 `MAX_EPISODES_PER_RUN` 篇（当前为 `2`）。20 篇回填队列按每轮 2 集、每天 6 轮计算，理想情况下约需 2 天；实际时间会受 TTS 响应、Cloudflare 执行限制和失败重试影响。若 Microsoft TTS 开始限流或 Worker 日志出现超时，应把该值调低。
+每次 Cron 最多顺序合成 `MAX_EPISODES_PER_RUN` 篇（当前为 `10`）。快速回填模式下 Cron 每小时一次，约 375 篇待回填文章按每轮 10 集计算约需 38 小时；相邻两集之间固定间隔 2 秒，降低 TTS 被限流的概率。实际时间会受 TTS 响应、Cloudflare 执行限制和单篇失败影响；单篇合成失败会立即记为 `failed` 并继续下一篇，不重试、不阻塞整轮。若 Worker 日志出现超时或 TTS 限流，可把该值调低。单轮 10 集会明显增加 Scheduled Worker 的运行时长与出站请求数，需留意账户计划的 CPU / 时长 / subrequest 限额。
 
-D1 `cron_lock` 租约防止手动触发和 Cron 重叠时重复合成；过期的 `processing` 任务会在下一轮恢复。单集最多尝试 5 次；第五次失败后状态变为 `failed`，不再自动重试。排查后可在 D1 Console 或 Wrangler 执行以下 SQL 手动重置：
+D1 `cron_lock` 租约防止手动触发和 Cron 重叠时重复合成；过期的 `processing` 任务会在下一轮恢复。快速回填模式下，单集**一旦合成失败就立即记为 `failed`**，跳过继续下一篇，不再自动重试，避免失败文章卡住整轮。排查后可在 D1 Console 或 Wrangler 执行以下 SQL 手动重置：
 
 ```sql
 UPDATE episodes
@@ -93,7 +93,7 @@ WHERE slug = '<episode-slug>' AND status = 'failed';
    npm run deploy
    ```
 
-   Wrangler 会按序应用 `0001_init.sql` ~ `0005_episode_description.sql`，并配置每 4 小时一次的 Cron Trigger。已有数据库请先确认 `0004`、`0005` 的列已存在，再部署新代码。首次上线后，到 **Workers & Pages → 134688-blog-podcast → Settings → Triggers → Cron Triggers** 确认触发器已同步。
+   Wrangler 会按序应用 `0001_init.sql` ~ `0005_episode_description.sql`，并配置每小时一次的 Cron Trigger（快速回填模式，回填完成后可改回每 4 小时一次）。已有数据库请先确认 `0004`、`0005` 的列已存在，再部署新代码。首次上线后，到 **Workers & Pages → 134688-blog-podcast → Settings → Triggers → Cron Triggers** 确认触发器已同步。
 
 5. 打开部署输出的 `workers.dev` 地址，查看播客网站。JSON 接口为 `/api/episodes`，播客订阅地址为 `/feed.xml`。可用 `https://<worker-domain>/api/health` 检查服务。
 
@@ -112,17 +112,17 @@ npm run dev
 curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled"
 ```
 
-首次运行会按“首次启动行为”建立基线；本地 `wrangler.jsonc` 当前也会登记最多 400 篇、排队 20 篇，并按每轮设置处理最多 2 集。短文会在正文检查后跳过。本地 Worker 需要能够访问博客，以及 MiMo 或微软 Edge TTS 服务。
+首次运行会按“首次启动行为”建立基线；本地 `wrangler.jsonc` 当前也会登记最多 400 篇、全部排队（400），并按每轮设置处理最多 10 集，篇间间隔 2 秒。短文会在正文检查后跳过。本地 Worker 需要能够访问博客，以及 MiMo 或微软 Edge TTS 服务。
 
 ## 常见排查
 
 - **没有新 episode**：检查 `https://134688.xyz/rss.xml` 是否可访问、Cloudflare Cron 是否已同步，以及正文容器是否仍能命中（`#article-content` / `article` / `main`）。实际正文不足 100 字的文章会有意跳过；RSS 摘要长度不用于判断。
 - **文章 URL 被拒绝**：检查 RSS 链接是否是 HTTPS、域名是否列在 `ALLOWED_SOURCE_HOSTS` 中，并确认重定向没有跳到其他域名。
 - **TTS 返回错误/403**：检查 Cloudflare Worker 日志、`EDGE_CHROMIUM_VERSION` 与匹配的 User-Agent 主版本、服务器时间及微软服务是否临时限流或更改协议。
-- **失败文章不再自动重试**：代码最多尝试 5 次。检查 `last_error` 后，按上面的 SQL 将该 episode 重置为 `pending`。
+- **失败文章不再自动重试**：快速回填模式下单集失败即 `failed`，不重试。检查 `last_error` 后，按上面的 SQL 将该 episode 重置为 `pending`。
 - **RSS 音频无法播放**：确保访问的是 Worker 的 `/feed.xml`，并检查 `/audio/{slug}` 返回 MP3。R2 桶不需要公开。
 - **详情页摘要为空**：`description` 为空时自动用标题兜底；详情页不再读取博客文章页，博客暂时不可访问也不影响已发布节目。
-- **Cron 运行资源不足**：Scheduled Worker 的 CPU 与运行限额受 Cloudflare 账户计划影响。当前每轮最多处理 2 集；若日志报 CPU/time limit，可进一步检查 Worker 当前计划和文章长度。
+- **Cron 运行资源不足**：Scheduled Worker 的 CPU 与运行限额受 Cloudflare 账户计划影响。快速回填模式当前每轮最多处理 10 集、每小时一次，并插入 2 秒篇间间隔；若日志报 CPU/time limit 或 subrequest 超限，可把 `MAX_EPISODES_PER_RUN` 或 Cron 频率调低。
 
 ## 参考
 

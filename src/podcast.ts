@@ -7,6 +7,8 @@ const MAX_FEED_ITEMS = 400;
 const MAX_ATTEMPTS = 5;
 const CRON_LEASE_MS = 20 * 60 * 1000;
 const MIN_ARTICLE_CHARACTERS = 100;
+// 快速回填模式：相邻两集之间留 2 秒，避免连续请求 TTS 被限流。
+const EPISODE_DELAY_MS = 2_000;
 const URL_PATTERNS = [
   /\b(?:https?:\/\/|ftp:\/\/|www\.)[^\s<>"'`，。！？；：、（）【】《》「」『』\u3400-\u9fff\u3000-\u303f\uff00-\uffef]+/giu,
   /(?<![@a-z0-9_-])\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|cn|net|org|edu|gov|mil|int|io|ai|app|dev|xyz|uk|us|ca|au|jp|de|fr|info|biz|me|tv|tech|site|online|store|cloud|blog|co)(?::\d{1,5})?(?:[/?#][^\s<>"'`，。！？；：、（）【】《》「」『』\u3400-\u9fff\u3000-\u303f\uff00-\uffef]+)?/giu,
@@ -132,6 +134,27 @@ async function queueNewItems(env: Env, items: SourceItem[]): Promise<number> {
     inserted += result.meta.changes || 0;
   }
   return inserted;
+}
+
+// 快速回填模式：首次 bootstrap 会把超过 INITIAL_BACKFILL_COUNT 的历史文章登记为
+// baseline 且永不处理；把 INITIAL_BACKFILL_COUNT 调大后，需要把这些「从未尝试过」
+// 的文章重新排入队列。只挑 attempts=0 且无音频的行：短文被判 baseline 时 attempts
+// 已 +1，不会被误捞；published / failed / processing 也不满足条件。幂等，可每轮运行。
+async function requeueDeferredBaseline(env: Env): Promise<number> {
+  const result = await env.DB.prepare(
+    `UPDATE episodes
+        SET status = 'pending', last_error = NULL, updated_at = ?
+      WHERE status = 'baseline'
+        AND attempts = 0
+        AND audio_key IS NULL`,
+  )
+    .bind(new Date().toISOString())
+    .run();
+  return result.meta.changes || 0;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(() => resolve(), ms));
 }
 
 // 0004 老数据迁移：老行的 slug 是 hash(URL)。把旧 ID 原样存到 legacy_slug，
@@ -265,16 +288,16 @@ async function processEpisode(env: Env, episode: EpisodeRow): Promise<void> {
       provider: synthesized.provider,
     });
   } catch (error) {
-    const status = attempt >= MAX_ATTEMPTS ? "failed" : "pending";
+    // 快速回填模式：单篇合成失败立即记为 failed 并继续下一篇，不重试、不卡住整轮。
     const message = error instanceof Error ? error.message : String(error);
     await env.DB.prepare(
       `UPDATE episodes
-          SET status = ?, last_error = ?, updated_at = ?
+          SET status = 'failed', last_error = ?, updated_at = ?
         WHERE slug = ? AND status = 'processing'`,
     )
-      .bind(status, message.slice(0, 1_000), new Date().toISOString(), episode.slug)
+      .bind(message.slice(0, 1_000), new Date().toISOString(), episode.slug)
       .run();
-    console.error("episode generation failed", episode.slug, `attempt ${attempt}/${MAX_ATTEMPTS}`, message);
+    console.error("episode generation failed; marked as failed and continuing", episode.slug, `attempt ${attempt}`, message);
   }
 }
 
@@ -327,6 +350,11 @@ export async function pollAndProcess(env: Env): Promise<void> {
       console.info("new RSS items queued", inserted);
     }
 
+    // 快速回填：把首次 bootstrap 时因超出旧 INITIAL_BACKFILL_COUNT 而搁置的
+    // baseline 历史文章补进队列（幂等），确保本轮就能开始处理它们。
+    const requeued = await requeueDeferredBaseline(env);
+    if (requeued > 0) console.info("deferred baseline episodes requeued", requeued);
+
     const maxEpisodes = integerSetting(env.MAX_EPISODES_PER_RUN, 1, 1, 10);
     const pending = await env.DB.prepare(
       `SELECT slug, title, source_url, published_at, description, legacy_slug,
@@ -339,7 +367,30 @@ export async function pollAndProcess(env: Env): Promise<void> {
       .bind(MAX_ATTEMPTS, maxEpisodes)
       .all<EpisodeRow>();
 
-    for (const episode of pending.results) await processEpisode(env, episode);
+    for (let index = 0; index < pending.results.length; index++) {
+      const episode = pending.results[index];
+      try {
+        await processEpisode(env, episode);
+      } catch (error) {
+        // 双保险：单篇若连状态回写都失败，也不让它中断整轮。
+        console.error("unexpected error while processing episode; continuing", episode.slug, error);
+        try {
+          await env.DB.prepare(
+            `UPDATE episodes
+                SET status = 'failed', last_error = ?, updated_at = ?
+              WHERE slug = ? AND status = 'processing'`,
+          )
+            .bind(String(error).slice(0, 1_000), new Date().toISOString(), episode.slug)
+            .run();
+        } catch (markError) {
+          console.error("could not mark episode as failed", episode.slug, markError);
+        }
+      }
+      // 相邻两集之间留 2 秒，避免连续请求 TTS 被限流；最后一篇之后无需等待。
+      if (index < pending.results.length - 1) {
+        await delay(EPISODE_DELAY_MS);
+      }
+    }
   } finally {
     await releaseCronLease(env, leaseUntil);
   }
