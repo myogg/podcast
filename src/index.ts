@@ -55,30 +55,82 @@ function validBearerToken(request: Request, expected: string): boolean {
   return difference === 0;
 }
 
-async function listEpisodes(env: Env): Promise<Array<{
+// 网站列表每页集数。/feed.xml 不分页，见 buildPodcastFeed。
+const EPISODES_PAGE_SIZE = 12;
+const MAX_EPISODES_PAGE_SIZE = 100;
+
+// page/limit 只接受正整数；非法值回退默认值，limit 受上限保护。
+function parsePositiveInt(value: string | null, fallback: number, max: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, max);
+}
+
+interface EpisodeListItem {
   slug: string;
   title: string;
   publishedAt: string;
   description: string;
   sourceUrl: string;
   audioUrl: string;
-}>> {
+}
+
+interface EpisodeListResult {
+  episodes: EpisodeListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+    hasPrev: boolean;
+    hasNext: boolean;
+  };
+}
+
+async function listEpisodes(
+  env: Env,
+  page: number,
+  pageSize: number,
+): Promise<EpisodeListResult> {
+  const countRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM episodes WHERE status = 'published'",
+  ).first<{ total: number | string }>();
+  const total = Math.max(0, Number(countRow?.total) || 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  // 越界页码收敛到最后一页，避免旧分享链接返回空列表。
+  const safePage = Math.min(page, totalPages);
+  const offset = (safePage - 1) * pageSize;
+
+  // 加 slug 作为并列排序的次级键，保证翻页时不会重复或漏集。
   const result = await env.DB.prepare(
     `SELECT slug, title, source_url, published_at, description
        FROM episodes
       WHERE status = 'published'
-      ORDER BY published_at DESC
-      LIMIT 100`,
-  ).all<Pick<EpisodeRow, "slug" | "title" | "source_url" | "published_at" | "description">>();
+      ORDER BY published_at DESC, slug DESC
+      LIMIT ? OFFSET ?`,
+  )
+    .bind(pageSize, offset)
+    .all<Pick<EpisodeRow, "slug" | "title" | "source_url" | "published_at" | "description">>();
 
-  return result.results.map((episode) => ({
-    slug: episode.slug,
-    title: episode.title,
-    publishedAt: episode.published_at,
-    description: resolveDescription(episode),
-    sourceUrl: episode.source_url,
-    audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
-  }));
+  return {
+    episodes: result.results.map((episode) => ({
+      slug: episode.slug,
+      title: episode.title,
+      publishedAt: episode.published_at,
+      description: resolveDescription(episode),
+      sourceUrl: episode.source_url,
+      audioUrl: `/audio/${encodeURIComponent(episode.slug)}`,
+    })),
+    pagination: {
+      page: safePage,
+      pageSize,
+      total,
+      totalPages,
+      hasPrev: safePage > 1,
+      hasNext: safePage < totalPages,
+    },
+  };
 }
 
 // 详情页只读 D1 元数据，不再抓取博客文章页，也不再返回文章全文。
@@ -306,7 +358,13 @@ document.getElementById("run").addEventListener("submit",async(event)=>{
   }
 
   if (url.pathname === "/api/episodes" && request.method === "GET") {
-    return json({ episodes: await listEpisodes(env) });
+    const page = parsePositiveInt(url.searchParams.get("page"), 1, Number.MAX_SAFE_INTEGER);
+    const limit = parsePositiveInt(
+      url.searchParams.get("limit"),
+      EPISODES_PAGE_SIZE,
+      MAX_EPISODES_PAGE_SIZE,
+    );
+    return json(await listEpisodes(env, page, limit));
   }
 
   const detailMatch = url.pathname.match(/^\/api\/episodes\/([^/]+)$/);

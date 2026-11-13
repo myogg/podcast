@@ -2,6 +2,7 @@ const list = document.querySelector("#episode-list");
 const empty = document.querySelector("#empty-state");
 const error = document.querySelector("#error-state");
 const count = document.querySelector("#episode-count");
+const pagination = document.querySelector("#pagination");
 const main = document.querySelector("main");
 const fallbackCover = "/cover.jpg";
 const detailNotice = "完整文章请到博客阅读，播客这里只显示摘要。";
@@ -32,11 +33,12 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? "发布日期未知" : dateFormatter.format(date);
 }
 
-function createEpisode(episode, index) {
+// 序号是全站连续编号，不是每页从 01 重新开始。
+function createEpisode(episode, index, sequence) {
   const card = element("article", "episode-card");
   card.style.animationDelay = `${Math.min(index * 45, 360)}ms`;
 
-  const number = element("div", "episode-number", String(index + 1).padStart(2, "0"));
+  const number = element("div", "episode-number", String(sequence).padStart(2, "0"));
   const content = element("div", "episode-main");
   const date = element("p", "episode-date", formatDate(episode.publishedAt));
   const title = element("h3", "episode-title");
@@ -68,29 +70,149 @@ function createEpisode(episode, index) {
   return card;
 }
 
-async function loadEpisodes() {
+function readPageFromUrl() {
+  const value = Number(new URLSearchParams(location.search).get("page"));
+  return Number.isSafeInteger(value) && value >= 1 ? value : 1;
+}
+
+// 只改 page 参数，保留其余 query 与 hash（首页有 #episodes 锚点）。
+function setPageUrl(page, replace) {
+  const url = new URL(location.href);
+  if (page <= 1) url.searchParams.delete("page");
+  else url.searchParams.set("page", String(page));
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  if (replace) history.replaceState({ page }, "", next);
+  else history.pushState({ page }, "", next);
+}
+
+function pageNumbers(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  if (current <= 3) [2, 3, 4].forEach((p) => pages.add(p));
+  if (current >= total - 2) [total - 3, total - 2, total - 1].forEach((p) => pages.add(p));
+  return [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b);
+}
+
+function renderPagination(info) {
+  if (!pagination) return;
+  pagination.replaceChildren();
+  const totalPages = Math.max(1, info.totalPages || 1);
+  if (totalPages <= 1) {
+    pagination.hidden = true;
+    return;
+  }
+  pagination.hidden = false;
+
+  const makeButton = (label, page, { disabled, current } = {}) => {
+    const button = element("button", "pagination-button", label);
+    button.type = "button";
+    if (disabled) {
+      button.disabled = true;
+    } else if (current) {
+      button.classList.add("is-current");
+      button.setAttribute("aria-current", "page");
+      button.disabled = true;
+    } else {
+      button.dataset.page = String(page);
+      button.setAttribute("aria-label", `第 ${page} 页`);
+    }
+    return button;
+  };
+
+  pagination.append(
+    makeButton("← 上一页", info.page - 1, { disabled: !info.hasPrev }),
+  );
+
+  let previous = 0;
+  for (const page of pageNumbers(info.page, totalPages)) {
+    if (page - previous > 1) {
+      pagination.append(element("span", "pagination-ellipsis", "…"));
+    }
+    pagination.append(makeButton(String(page), page, { current: page === info.page }));
+    previous = page;
+  }
+
+  pagination.append(
+    makeButton("下一页 →", info.page + 1, { disabled: !info.hasNext }),
+    element(
+      "span",
+      "pagination-status",
+      `第 ${info.page} / ${totalPages} 页 · 共 ${info.total} 集`,
+    ),
+  );
+}
+
+let requestSeq = 0;
+
+async function loadEpisodes(page, { syncUrl = true } = {}) {
+  const seq = ++requestSeq;
+  if (list) {
+    list.replaceChildren(element("div", "loading-state", "正在读取节目单"));
+  }
   try {
-    const response = await fetch("/api/episodes", { headers: { Accept: "application/json" } });
+    const response = await fetch(`/api/episodes?page=${page}`, {
+      headers: { Accept: "application/json" },
+    });
     if (!response.ok) throw new Error(`Episode API returned ${response.status}`);
     const payload = await response.json();
+    if (seq !== requestSeq) return; // 丢弃过期的翻页响应
     const episodes = Array.isArray(payload.episodes) ? payload.episodes : [];
+    const info = payload.pagination || {
+      page,
+      pageSize: episodes.length || 12,
+      total: episodes.length,
+      totalPages: 1,
+      hasPrev: false,
+      hasNext: false,
+    };
 
-    list.replaceChildren();
-    count.textContent = String(episodes.length).padStart(2, "0");
+    // 服务端可能把越界页码收敛到最后一页，修正 URL 保持一致。
+    if (syncUrl && info.page !== readPageFromUrl()) setPageUrl(info.page, true);
+
+    if (list) list.replaceChildren();
+    if (count) count.textContent = String(info.total).padStart(2, "0");
     error.hidden = true;
-    empty.hidden = episodes.length > 0;
+    empty.hidden = info.total > 0;
+    renderPagination(info);
     if (!episodes.length) return;
 
+    const offset = (info.page - 1) * info.pageSize;
     const fragment = document.createDocumentFragment();
-    episodes.forEach((episode, index) => fragment.append(createEpisode(episode, index)));
+    episodes.forEach((episode, index) => {
+      fragment.append(createEpisode(episode, index, offset + index + 1));
+    });
     list.append(fragment);
   } catch (cause) {
+    if (seq !== requestSeq) return;
     console.error("Could not load podcast episodes", cause);
-    list.replaceChildren();
-    count.textContent = "—";
+    if (list) list.replaceChildren();
+    if (count) count.textContent = "—";
+    if (pagination) {
+      pagination.replaceChildren();
+      pagination.hidden = true;
+    }
     empty.hidden = true;
     error.hidden = false;
   }
+}
+
+function initList() {
+  if (pagination) {
+    pagination.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-page]");
+      if (!button) return;
+      const page = Number(button.dataset.page);
+      if (!Number.isSafeInteger(page) || page < 1) return;
+      setPageUrl(page, false);
+      loadEpisodes(page, { syncUrl: false });
+      const section = document.querySelector("#episodes");
+      if (section) section.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+  window.addEventListener("popstate", () => {
+    loadEpisodes(readPageFromUrl(), { syncUrl: false });
+  });
+  loadEpisodes(readPageFromUrl(), { syncUrl: false });
 }
 
 function renderDetailError(message) {
@@ -181,5 +303,5 @@ if (detailMatch) {
   }
   loadEpisodeDetail(slug);
 } else if (list && empty && error && count) {
-  loadEpisodes();
+  initList();
 }
