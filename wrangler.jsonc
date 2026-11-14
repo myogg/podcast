@@ -10,7 +10,7 @@
     "run_worker_first": ["/api/*", "/feed.xml", "/audio/*", "/episode/*"]
   },
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["0 */4 * * *"]
   },
   "r2_buckets": [
     {
